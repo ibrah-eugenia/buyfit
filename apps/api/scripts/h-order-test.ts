@@ -5,6 +5,7 @@
  */
 import { config } from "../src/config.js";
 import { getSessionState, startOrderSession } from "../src/modules/hcompany.js";
+import { getProfile } from "../src/modules/supabase.js";
 
 const [productUrl, taille = "M"] = process.argv.slice(2);
 if (!productUrl) {
@@ -16,7 +17,19 @@ if (config.mocks.hcompany) {
   process.exit(1);
 }
 
-const { sessionId, agentViewUrl } = await startOrderSession({ productUrl, taille });
+// Même logique que POST /order : compte marchand du profil démo dont le domaine correspond.
+const host = new URL(productUrl).hostname;
+const profile = await getProfile("demo-user");
+const compte = profile?.comptesMarchands.find((m) => host.endsWith(m.domaine));
+console.log(
+  `compte   ${compte ? `${compte.marchand} (vault ${compte.vaultId ?? "aucun"})` : "aucun"}`,
+);
+
+const { sessionId, agentViewUrl } = await startOrderSession({
+  productUrl,
+  taille,
+  ...(compte ? { compte } : {}),
+});
 console.log(`session  ${sessionId}`);
 console.log(`live     ${agentViewUrl}`);
 

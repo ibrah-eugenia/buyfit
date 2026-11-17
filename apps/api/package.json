@@ -10,7 +10,8 @@
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "h:agents": "tsx --env-file-if-exists=../../.env scripts/h-agents.ts",
-    "h:order-test": "tsx --env-file-if-exists=../../.env scripts/h-order-test.ts"
+    "h:order-test": "tsx --env-file-if-exists=../../.env scripts/h-order-test.ts",
+    "h:vault-add": "tsx --env-file-if-exists=../../.env scripts/h-vault-add.ts"
   },
   "dependencies": {
     "@buyfit/shared": "workspace:*",

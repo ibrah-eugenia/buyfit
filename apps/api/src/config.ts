@@ -12,6 +12,8 @@ const EnvSchema = z.object({
 
   HAI_API_KEY: z.string().optional(),
   HAI_AGENT_ID: z.string().default("h/web-surfer-pro"),
+  /** Vault H contenant les logins marchands du profil de démo (mock Supabase). */
+  HAI_DEMO_VAULT_ID: z.string().optional(),
 
   BRIGHTDATA_API_TOKEN: z.string().optional(),
   BRIGHTDATA_SERP_ZONE: z.string().default("serp_api1"),
