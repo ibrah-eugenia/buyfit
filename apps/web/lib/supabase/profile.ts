@@ -55,6 +55,13 @@ export async function upsertProfile(patch: ProfileUpdate): Promise<ActionResult<
     ...(p.budgetMax !== undefined && { budget_max: p.budgetMax }),
     ...(p.devise !== undefined && { devise: p.devise }),
     ...(p.marquesPreferees !== undefined && { marques_preferees: p.marquesPreferees }),
+    ...(p.genre !== undefined && { genre: p.genre }),
+    ...(p.poidsKg !== undefined && { poids_kg: p.poidsKg }),
+    ...(p.morphologie !== undefined && { morphologie: p.morphologie }),
+    ...(p.contact !== undefined && { contact: p.contact }),
+    ...(p.adresse !== undefined && { adresse: p.adresse }),
+    ...(p.daltonisme !== undefined && { daltonisme: p.daltonisme }),
+    ...(p.onboardingTermine !== undefined && { onboarding_termine: p.onboardingTermine }),
   };
 
   // Le profil est créé à l'inscription (trigger) : update, et insert seulement en secours.

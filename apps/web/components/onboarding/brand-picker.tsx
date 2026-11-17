@@ -3,7 +3,7 @@
 import { Check, Plus, Search, X } from "lucide-react";
 import { useId, useMemo, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
-import { MARQUES, MARQUES_SUGGEREES } from "@/lib/mocks";
+import { MARQUES, MARQUES_SUGGEREES } from "@/lib/data";
 import { cn, normaliser } from "@/lib/utils";
 
 /**

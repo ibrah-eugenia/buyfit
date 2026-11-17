@@ -14,7 +14,7 @@ import { StepMarques } from "@/components/onboarding/step-marques";
 import { StepMorpho } from "@/components/onboarding/step-morpho";
 import { StepPhotos } from "@/components/onboarding/step-photos";
 import { Progress } from "@/components/ui/progress";
-import { saveProfile } from "@/lib/mocks";
+import { saveProfile } from "@/lib/data";
 import { versEtape, versProfil } from "@/lib/profile-mapping";
 import type { WebProfile } from "@/lib/types";
 

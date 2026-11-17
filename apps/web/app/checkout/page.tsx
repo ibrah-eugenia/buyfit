@@ -25,13 +25,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  findRelayPoints,
-  getDeliveryQuote,
-  getOrders,
-  placeOrders,
-  saveProfile,
-} from "@/lib/mocks";
+import { findRelayPoints, getDeliveryQuote, getOrders, placeOrders, saveProfile } from "@/lib/data";
 import {
   AdresseSchema,
   ORDER_FINAL,

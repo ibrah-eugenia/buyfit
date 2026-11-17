@@ -11,7 +11,7 @@ import { ProductImage } from "@/components/product-image";
 import { CardsSkeleton, EmptyState, ErrorState } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getDashboard } from "@/lib/mocks";
+import { getDashboard } from "@/lib/data";
 import type { DashboardData, LookCapture, TryOnEntry } from "@/lib/types";
 import { cn, formatPrix } from "@/lib/utils";
 
