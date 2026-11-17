@@ -59,7 +59,8 @@ export interface BuyFitApi {
   tryOn(req: TryOnApiRequest): Promise<TryOnResult>;
   order(req: OrderRequest): Promise<OrderStatus>;
   getOrder(orderId: string): Promise<OrderStatus>;
-  confirmOrder(orderId: string): Promise<OrderStatus>;
+  /** Étape livraison : `livraison` = id du mode choisi. Étape paiement : sans argument. */
+  confirmOrder(orderId: string, livraison?: string): Promise<OrderStatus>;
 }
 
 const httpApi: BuyFitApi = {
@@ -70,8 +71,13 @@ const httpApi: BuyFitApi = {
   tryOn: (req) => request("POST", "/tryon", TryOnResultSchema, req),
   order: (req) => request("POST", "/order", OrderStatusSchema, req),
   getOrder: (id) => request("GET", `/order/${encodeURIComponent(id)}`, OrderStatusSchema),
-  confirmOrder: (id) =>
-    request("POST", `/order/${encodeURIComponent(id)}/confirm`, OrderStatusSchema),
+  confirmOrder: (id, livraison) =>
+    request(
+      "POST",
+      `/order/${encodeURIComponent(id)}/confirm`,
+      OrderStatusSchema,
+      livraison ? { livraison } : {},
+    ),
 };
 
 export const api: BuyFitApi = USE_MOCK ? mockApi : httpApi;

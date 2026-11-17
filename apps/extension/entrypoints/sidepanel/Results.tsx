@@ -1,5 +1,6 @@
 import type { ProductMatch } from "@buyfit/shared";
 import { useEffect, useState } from "react";
+import { Checkout } from "./Checkout";
 import type { Piece } from "./Home";
 import { Spinner } from "./Spinner";
 
@@ -19,14 +20,22 @@ const price = (p: ProductMatch) =>
 export function Results({
   piece,
   search,
+  userId,
+  size,
   onRestart,
   onRetry,
 }: {
   piece: Piece;
   search: SearchState;
+  userId: string;
+  size: string | null;
   onRestart: () => void;
   onRetry?: (() => void) | undefined;
 }) {
+  const [buying, setBuying] = useState<ProductMatch | null>(null);
+  if (buying) {
+    return <Checkout product={buying} userId={userId} size={size ?? "M"} onBack={() => setBuying(null)} />;
+  }
   return (
     <div className="screen">
       <div className="content">
@@ -43,7 +52,11 @@ export function Results({
           <Status text={search.message} error action={onRetry && { label: "Réessayer", onClick: onRetry }} />
         ) : search.kind === "ready" ? (
           search.resultats.length ? (
-            <Carousel key={search.resultats.map((r) => r.id).join()} items={search.resultats} />
+            <Carousel
+              key={search.resultats.map((r) => r.id).join()}
+              items={search.resultats}
+              onBuy={setBuying}
+            />
           ) : (
             <Status text="Aucun article assez ressemblant chez Zara, Mango ou Uniqlo." />
           )
@@ -85,7 +98,7 @@ function Status({
   );
 }
 
-function Carousel({ items }: { items: ProductMatch[] }) {
+function Carousel({ items, onBuy }: { items: ProductMatch[]; onBuy: (p: ProductMatch) => void }) {
   const [i, setI] = useState(0);
   const p = items[Math.min(i, items.length - 1)]!;
   const go = (d: number) => setI((cur) => (cur + d + items.length) % items.length);
@@ -108,21 +121,24 @@ function Carousel({ items }: { items: ProductMatch[] }) {
             <Chevron dir="left" />
           </button>
         )}
-        <a key={p.id} className="slide" href={p.url} target="_blank" rel="noreferrer">
-          <div className="slide-media">
+        <article key={p.id} className="slide">
+          <a className="slide-media" href={p.url} target="_blank" rel="noreferrer">
             <img src={p.imageUrl} alt={p.nom} />
             <span className="store">{p.marque}</span>
-          </div>
+          </a>
           <div className="slide-body">
             <div className="slide-name">{p.nom}</div>
             <div className="slide-foot">
               <span className="price">{p.prix > 0 ? price(p) : ""}</span>
-              <span className="see">
+              <a className="see" href={p.url} target="_blank" rel="noreferrer">
                 {p.prix > 0 ? "Voir" : "Voir le prix"} <ExternalIcon />
-              </span>
+              </a>
             </div>
+            <button type="button" className="btn primary buy" onClick={() => onBuy(p)}>
+              Acheter
+            </button>
           </div>
-        </a>
+        </article>
         {items.length > 1 && (
           <button type="button" className="arrow next" aria-label="Article suivant" onClick={() => go(1)}>
             <Chevron dir="right" />

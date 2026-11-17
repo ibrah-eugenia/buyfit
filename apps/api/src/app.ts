@@ -11,6 +11,7 @@ import {
   SearchResponseSchema,
   SerpRequestSchema,
   SerpResponseSchema,
+  OrderConfirmRequestSchema,
   OrderRequestSchema,
   OrderStatusSchema,
   TryOnApiRequestSchema,
@@ -21,7 +22,13 @@ import {
 import { config } from "./config.js";
 import { HttpError, upstream } from "./errors.js";
 import { findMatches, serpShopping } from "./modules/brightdata.js";
-import { confirmOrderSession, getSessionState, startOrderSession } from "./modules/hcompany.js";
+import {
+  chooseDeliverySession,
+  confirmOrderSession,
+  getSessionState,
+  startOrderSession,
+  type SessionState,
+} from "./modules/hcompany.js";
 import {
   createOrder,
   getOrder,
@@ -70,13 +77,21 @@ async function requireOrder(id: string) {
   return order;
 }
 
-const toStatus = (o: OrderRecord, message?: string): OrderStatus =>
+const toStatus = (o: OrderRecord, message?: string, state?: SessionState): OrderStatus =>
   OrderStatusSchema.parse({
     orderId: o.id,
     statut: o.statut,
     h_session_id: o.hSessionId,
     ...(o.agentViewUrl ? { agentViewUrl: o.agentViewUrl } : {}),
     ...(message ? { message } : {}),
+    // Étape de pause (livraison / paiement) : seulement pendant `confirmation_requise`.
+    ...(state && o.statut === "confirmation_requise"
+      ? {
+          ...(state.etape ? { etape: state.etape } : {}),
+          ...(state.livraisons ? { livraisons: state.livraisons } : {}),
+          ...(state.total ? { total: state.total } : {}),
+        }
+      : {}),
     updatedAt: o.updatedAt,
   });
 
@@ -201,16 +216,31 @@ app.get("/order/:id", async (c) => {
   if (state.statut !== order.statut) {
     order = await call("supabase", () => updateOrder(order.id, { statut: state.statut }));
   }
-  return c.json(toStatus(order, state.message));
+  return c.json(toStatus(order, state.message, state));
 });
 
-// POST /order/:id/confirm → OrderStatus (feu vert explicite de l'utilisateur avant paiement)
+// POST /order/:id/confirm → OrderStatus
+// Étape livraison : { livraison } = mode choisi → l'agent va jusqu'à la page de paiement.
+// Étape paiement : feu vert explicite de l'utilisateur → l'agent valide le paiement.
 app.post("/order/:id/confirm", async (c) => {
+  const raw: unknown = await c.req.json().catch(() => ({}));
+  const parsed = OrderConfirmRequestSchema.safeParse(raw ?? {});
+  if (!parsed.success) throw new HttpError(400, "Requête invalide", parsed.error.issues);
   let order = await requireOrder(c.req.param("id"));
   if (order.statut !== "confirmation_requise" || !order.hSessionId) {
     throw new HttpError(409, `Commande en statut "${order.statut}" : rien à confirmer`);
   }
   const { hSessionId } = order;
+  const state = await call("hcompany", () => getSessionState(hSessionId, order.confirmed));
+
+  if (state.etape === "livraison") {
+    const option = state.livraisons?.find((l) => l.id === parsed.data.livraison);
+    if (!option) throw new HttpError(400, "Choisis un mode de livraison proposé");
+    await call("hcompany", () => chooseDeliverySession(hSessionId, option));
+    order = await call("supabase", () => updateOrder(order.id, { statut: "en_cours" }));
+    return c.json(toStatus(order, `${option.label} choisie, l'agent continue…`));
+  }
+
   await call("hcompany", () => confirmOrderSession(hSessionId));
   order = await call("supabase", () =>
     updateOrder(order.id, { confirmed: true, statut: "en_cours" }),

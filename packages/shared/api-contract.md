@@ -94,13 +94,24 @@ Suit l'avancement de la session H Company associée à la commande `:id`.
 Statuts : `en_attente` → `en_cours` → `confirmation_requise` → `commandee` | `echec`.
 Polling conseillé côté client : toutes les 3 s jusqu'à un statut terminal (`commandee`, `echec`).
 
-## `POST /order/:id/confirm` (ajout — garde-fou paiement)
+L'agent fait deux pauses en `confirmation_requise`, distinguées par `etape` :
 
-Feu vert explicite de l'utilisateur quand la commande est en `confirmation_requise` : l'API
-demande alors à l'agent H Company de cliquer sur le bouton final de paiement.
+| `etape`     | L'agent s'est arrêté…                         | Champs en plus                        |
+| ----------- | --------------------------------------------- | ------------------------------------- |
+| `livraison` | sur le choix du mode de livraison (panier OK) | `livraisons: { id, label, prix?, delai? }[]` |
+| `paiement`  | sur la dernière page avant le paiement        | `total` (ex. `"75,90 €"`), `message` = récapitulatif |
+
+## `POST /order/:id/confirm` (ajout — livraison puis garde-fou paiement)
+
+Réponse de l'utilisateur quand la commande est en `confirmation_requise` :
+
+- étape `livraison` : `{ livraison: "<id>" }` → l'agent choisit ce mode et va jusqu'à la page de
+  paiement (nouvelle pause, étape `paiement`) ;
+- étape `paiement` : corps vide → feu vert explicite, l'agent clique sur le bouton final de paiement.
 
 |               | Schéma                                                                   |
 | ------------- | ------------------------------------------------------------------------ |
-| Requête       | aucun corps                                                              |
-| Réponse `200` | `OrderStatus` (statut `en_cours`, puis `commandee` via `GET /order/:id`) |
+| Requête       | `OrderConfirmRequest` = `{ livraison? }`                                 |
+| Réponse `200` | `OrderStatus` (statut `en_cours`, puis pause suivante ou `commandee`)    |
+| `400`         | étape `livraison` sans mode valide                                       |
 | `409`         | la commande n'est pas en `confirmation_requise`                          |

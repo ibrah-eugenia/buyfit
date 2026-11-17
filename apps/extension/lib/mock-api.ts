@@ -40,7 +40,12 @@ const PRODUCTS: ProductMatch[] = [
   },
 ];
 
-const orders = new Map<string, { startedAt: number; confirmedAt?: number }>();
+const orders = new Map<string, { startedAt: number; deliveryAt?: number; confirmedAt?: number }>();
+const LIVRAISONS = [
+  { id: "standard", label: "Livraison standard", prix: "Gratuit", delai: "3 à 5 jours ouvrés" },
+  { id: "express", label: "Livraison express", prix: "6,95 €", delai: "24 h" },
+  { id: "relais", label: "Point relais", prix: "2,95 €", delai: "2 à 4 jours ouvrés" },
+];
 
 function status(orderId: string): OrderStatus {
   const o = orders.get(orderId);
@@ -52,13 +57,18 @@ function status(orderId: string): OrderStatus {
   if (!o) return { ...base, statut: "echec", message: "Commande inconnue" };
   if (o.confirmedAt) {
     return Date.now() - o.confirmedAt > 3000
-      ? { ...base, statut: "commandee", message: "Commande mock validée (n° MOCK-1234)." }
+      ? { ...base, statut: "commandee", message: "Commande n° MOCK-1234" }
       : { ...base, statut: "en_cours", message: "Validation du paiement…" };
+  }
+  if (o.deliveryAt) {
+    return Date.now() - o.deliveryAt > 3000
+      ? { ...base, statut: "confirmation_requise", etape: "paiement", message: "Veste croisée beige, taille L", total: "75,90 €" }
+      : { ...base, statut: "en_cours", message: "L'agent finalise la commande…" };
   }
   const t = Date.now() - o.startedAt;
   if (t < 2000) return { ...base, statut: "en_attente" };
-  if (t < 7000) return { ...base, statut: "en_cours", message: "L'agent remplit le panier…" };
-  return { ...base, statut: "confirmation_requise", message: "Panier prêt : confirme l'achat." };
+  if (t < 6000) return { ...base, statut: "en_cours", message: "L'agent ajoute l'article au panier…" };
+  return { ...base, statut: "confirmation_requise", etape: "livraison", livraisons: LIVRAISONS };
 }
 
 export const mockApi: BuyFitApi = {
@@ -106,9 +116,10 @@ export const mockApi: BuyFitApi = {
   async getOrder(id) {
     return status(id);
   },
-  async confirmOrder(id) {
+  async confirmOrder(id, livraison) {
     const o = orders.get(id);
-    if (o) o.confirmedAt = Date.now();
+    if (o && livraison) o.deliveryAt = Date.now();
+    else if (o) o.confirmedAt = Date.now();
     return status(id);
   },
 };

@@ -243,6 +243,8 @@ function PinFlow({
       <Results
         piece={piece}
         search={search}
+        userId={userId}
+        size={size}
         onRestart={restart}
         onRetry={piece.kind === "ready" ? () => void runSearch(piece.item, piece.cropUrl) : undefined}
       />
