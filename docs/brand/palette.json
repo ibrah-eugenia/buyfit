@@ -1,0 +1,36 @@
+{
+  "nom": "BuyFit",
+  "version": "1",
+  "slogan": "If you love this fit, buy it",
+  "couleurs": {
+    "bordeaux": { "hex": "#7A1F2B", "usage": "Marque, actions principales" },
+    "bordeauxProfond": { "hex": "#5C1420", "usage": "Survol, appui" },
+    "rosePoudre": {
+      "hex": "#F3D6DB",
+      "usage": "Fonds d'accent, sélection (texte dessus : #5C1420)"
+    },
+    "encre": { "hex": "#111111", "usage": "Texte principal" },
+    "texte": { "hex": "#333333", "usage": "Texte courant" },
+    "gris": { "hex": "#6B6B6B", "usage": "Texte secondaire" },
+    "lin": { "hex": "#F7F5F2", "usage": "Fonds de surface" },
+    "bordure": { "hex": "#E6E2DC", "usage": "Bordures" },
+    "bordureDouce": { "hex": "#EFECE8", "usage": "Séparateurs" },
+    "blanc": { "hex": "#FFFFFF", "usage": "Fond" }
+  },
+  "typographie": {
+    "famille": "Inter",
+    "graisses": [400, 500, 600, 700],
+    "titre": { "taille": 36, "graisse": 700, "interlettrage": "-0.03em" },
+    "sousTitre": { "taille": 20, "graisse": 600, "interlettrage": "-0.01em" },
+    "texte": { "taille": 15, "graisse": 400, "couleur": "#333333" },
+    "legende": { "taille": 12, "graisse": 500, "couleur": "#6B6B6B" },
+    "surTitre": {
+      "taille": 12,
+      "graisse": 600,
+      "interlettrage": "0.08em",
+      "casse": "majuscules",
+      "couleur": "#6B6B6B"
+    }
+  },
+  "rayons": { "element": 12, "champCompact": 10, "panneau": 16, "iconeApp": "22% du côté" }
+}
