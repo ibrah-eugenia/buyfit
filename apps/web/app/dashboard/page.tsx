@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Camera, ExternalLink, Package, Shirt, Sparkles } from "lucide-react";
+import { AlertTriangle, Camera, ExternalLink, Package, Shirt, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "@/components/app-providers";
 import { RequireAuth } from "@/components/layout/require-auth";
@@ -82,6 +82,10 @@ function Dashboard() {
     void charger();
   }, [charger]);
 
+  const aReconnecter = (profile?.comptesMarchands ?? [])
+    .filter((c) => c.statut === "a_reconnecter")
+    .map((c) => c.marchand);
+
   const onglets = [
     { value: "looks", label: "Looks", icon: Camera, n: data?.looks.length },
     { value: "produits", label: "Produits", icon: Shirt, n: data?.produits.length },
@@ -96,6 +100,26 @@ function Dashboard() {
         title="Du look à la commande"
         description="Tes looks capturés, les produits trouvés, tes essayages et le suivi de tes commandes."
       />
+      {aReconnecter.length > 0 && (
+        <div
+          role="status"
+          className="mb-6 flex flex-col gap-3 rounded-2xl border border-warning/30 bg-warning-soft p-4 sm:flex-row sm:items-center"
+        >
+          <AlertTriangle className="size-5 shrink-0 text-warning" aria-hidden="true" />
+          <p className="flex-1 text-sm text-ink">
+            <strong className="font-semibold">
+              {aReconnecter.length === 1
+                ? `Ton compte ${aReconnecter[0]} doit être reconnecté.`
+                : `Tes comptes ${aReconnecter.join(", ")} doivent être reconnectés.`}
+            </strong>{" "}
+            En attendant, l&apos;agent commande en invité chez{" "}
+            {aReconnecter.length === 1 ? "cette marque" : "ces marques"}.
+          </p>
+          <Button asChild size="sm">
+            <Link href="/settings?section=comptes">Reconnecter</Link>
+          </Button>
+        </div>
+      )}
       {erreur ? (
         <ErrorState message={erreur} onRetry={() => void charger()} />
       ) : (

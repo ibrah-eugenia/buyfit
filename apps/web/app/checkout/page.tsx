@@ -328,7 +328,13 @@ function Checkout() {
                   <div className="flex items-center justify-between">
                     <span className="font-bold">{marchand}</span>
                     <span className="text-caption font-medium text-grey">
-                      {compte ? "Sur ton compte client" : "Commande en invité"}
+                      {compte
+                        ? "Sur ton compte client"
+                        : profile.comptesMarchands.some(
+                              (c) => c.marchand === marchand && c.statut === "a_reconnecter",
+                            )
+                          ? "Compte à reconnecter : commande en invité"
+                          : "Commande en invité"}
                     </span>
                   </div>
                   {lignes.map((l) => (

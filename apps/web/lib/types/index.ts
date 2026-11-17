@@ -246,7 +246,8 @@ export type ContactStep = z.infer<typeof ContactStepSchema>;
 
 /** Compte marchand du contrat + statut d'affichage. Jamais de mot de passe : seulement `vaultId`. */
 export const CompteMarchandWebSchema = CompteMarchandSchema.extend({
-  statut: z.enum(["connecte", "non_connecte"]),
+  /** `a_reconnecter` : compte relié dont la session a expiré (mot de passe changé, compte bloqué…). */
+  statut: z.enum(["connecte", "a_reconnecter", "non_connecte"]),
   logoTexte: z.string(),
 });
 export type CompteMarchandWeb = z.infer<typeof CompteMarchandWebSchema>;

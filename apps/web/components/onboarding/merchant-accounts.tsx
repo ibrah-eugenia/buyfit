@@ -1,6 +1,14 @@
 "use client";
 
-import { CheckCircle2, Link2, Loader2, ShieldCheck, Unlink } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Link2,
+  Loader2,
+  RefreshCw,
+  ShieldCheck,
+  Unlink,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useSession } from "@/components/app-providers";
@@ -25,6 +33,12 @@ import { cn } from "@/lib/utils";
  * Le mot de passe n'est jamais saisi ni stocké par BuyFit : il va dans le coffre H Company,
  * on ne garde que la référence `vaultId`.
  */
+export const STATUT: Record<CompteMarchandWeb["statut"], { label: string; className: string }> = {
+  connecte: { label: "Connecté", className: "bg-success-soft text-success" },
+  a_reconnecter: { label: "À reconnecter", className: "bg-warning-soft text-warning" },
+  non_connecte: { label: "Non connecté", className: "bg-linen text-grey" },
+};
+
 export function MerchantAccounts() {
   const { session, profile, setProfile } = useSession();
   const [cible, setCible] = useState<CompteMarchandWeb | null>(null);
@@ -35,6 +49,13 @@ export function MerchantAccounts() {
   if (!session || !profile) return null;
   const comptes = profile.comptesMarchands;
 
+  function ouvrir(c: CompteMarchandWeb) {
+    if (!session || !profile) return;
+    setCible(c);
+    setEmail(c.email ?? profile.contact.email ?? session.email);
+    setErreur(null);
+  }
+
   async function connecter() {
     if (!cible || !session || !profile) return;
     if (!/^\S+@\S+\.\S+$/.test(email))
@@ -44,7 +65,9 @@ export function MerchantAccounts() {
     try {
       const maj = await connectMerchant(session.userId, cible.marchand, email);
       setProfile({ ...profile, comptesMarchands: maj });
-      toast.success(`Compte ${cible.marchand} connecté`);
+      toast.success(
+        `Compte ${cible.marchand} ${cible.statut === "a_reconnecter" ? "reconnecté" : "connecté"}`,
+      );
       setCible(null);
     } catch (e) {
       setErreur(e instanceof Error ? e.message : "Connexion impossible.");
@@ -74,15 +97,20 @@ export function MerchantAccounts() {
       <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {comptes.map((c) => {
           const connecte = c.statut === "connecte";
+          const aReconnecter = c.statut === "a_reconnecter";
           return (
             <li
               key={c.marchand}
               className={cn(
                 "flex flex-col gap-4 rounded-xl border p-4",
-                connecte ? "border-[1.5px] border-brand" : "border-line-soft",
+                connecte
+                  ? "border-[1.5px] border-brand"
+                  : aReconnecter
+                    ? "border-[1.5px] border-warning/60 bg-warning-soft/40"
+                    : "border-line-soft",
               )}
             >
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
                 <div className="flex items-center gap-3">
                   <span
                     className="flex size-11 items-center justify-center rounded-[10px] bg-linen text-[13px] font-bold tracking-tight"
@@ -95,18 +123,22 @@ export function MerchantAccounts() {
                     <span className="text-caption text-grey">{c.domaine}</span>
                   </div>
                 </div>
-                <Badge
-                  className={cn(
-                    "h-6 px-2.5",
-                    connecte ? "bg-success-soft text-success" : "bg-linen text-grey",
-                  )}
-                >
-                  {connecte ? <CheckCircle2 aria-hidden="true" /> : null}
-                  {connecte ? "Connecté" : "Non connecté"}
+                <Badge className={cn("h-6 px-2.5", STATUT[c.statut].className)}>
+                  {c.statut === "connecte" && <CheckCircle2 aria-hidden="true" />}
+                  {c.statut === "a_reconnecter" && <AlertTriangle aria-hidden="true" />}
+                  {STATUT[c.statut].label}
                 </Badge>
               </div>
-              {connecte && c.email && <p className="truncate text-caption text-grey">{c.email}</p>}
-              {connecte ? (
+              {c.statut !== "non_connecte" && c.email && (
+                <p className="truncate text-caption text-grey">{c.email}</p>
+              )}
+              {aReconnecter && (
+                <p className="text-caption text-copy">
+                  Session expirée. Reconnecte-toi pour que l&apos;agent commande sur ce compte ;
+                  sinon il commandera en invité.
+                </p>
+              )}
+              {connecte && (
                 <Button
                   type="button"
                   variant="outline"
@@ -121,17 +153,26 @@ export function MerchantAccounts() {
                   )}
                   Déconnecter
                 </Button>
-              ) : (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => {
-                    setCible(c);
-                    setEmail(profile.contact.email ?? session.email);
-                    setErreur(null);
-                  }}
-                >
+              )}
+              {aReconnecter && (
+                <div className="flex gap-2">
+                  <Button type="button" size="sm" className="flex-1" onClick={() => ouvrir(c)}>
+                    <RefreshCw aria-hidden="true" />
+                    Reconnecter
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={enCours === c.marchand}
+                    onClick={() => void deconnecter(c)}
+                  >
+                    Retirer
+                  </Button>
+                </div>
+              )}
+              {c.statut === "non_connecte" && (
+                <Button type="button" variant="secondary" size="sm" onClick={() => ouvrir(c)}>
                   <Link2 aria-hidden="true" />
                   Connecter mon compte
                 </Button>
@@ -144,7 +185,10 @@ export function MerchantAccounts() {
       <Dialog open={!!cible} onOpenChange={(o) => !o && setCible(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Connecter mon compte {cible?.marchand}</DialogTitle>
+            <DialogTitle>
+              {cible?.statut === "a_reconnecter" ? "Reconnecter" : "Connecter"} mon compte{" "}
+              {cible?.marchand}
+            </DialogTitle>
             <DialogDescription>
               L&apos;agent passera commande sur ton compte client {cible?.marchand} (points
               fidélité, historique).

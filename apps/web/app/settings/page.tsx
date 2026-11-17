@@ -42,7 +42,11 @@ export default function SettingsPage() {
 
 function Settings() {
   const { session, profile, setProfile } = useSession();
-  const [section, setSection] = useState<SectionId>("genre");
+  // Section ouverte par lien direct (ex. /settings?section=comptes depuis le tableau de bord).
+  const [section, setSection] = useState<SectionId>(() => {
+    const demandee = new URLSearchParams(window.location.search).get("section");
+    return SECTIONS.find((s) => s.id === demandee)?.id ?? "genre";
+  });
   if (!session || !profile) return null;
   const p = profile;
 
@@ -77,6 +81,11 @@ function Settings() {
                   type="button"
                   onClick={() => setSection(s.id)}
                   aria-current={section === s.id ? "page" : undefined}
+                  ref={(el) => {
+                    // Sur mobile, garde l'onglet actif visible dans la barre qui défile.
+                    if (el && section === s.id)
+                      el.scrollIntoView({ block: "nearest", inline: "nearest" });
+                  }}
                   className={cn(
                     "h-10 w-full rounded-[10px] px-3.5 text-left text-sm font-semibold whitespace-nowrap transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
                     section === s.id

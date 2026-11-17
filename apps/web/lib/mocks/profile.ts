@@ -24,10 +24,33 @@ export function profilVide(userId: string): WebProfile {
   };
 }
 
+/**
+ * Démo : une fois l'inscription terminée, on simule une session Mango expirée pour montrer
+ * le statut « À reconnecter ». Une seule fois par utilisateur.
+ */
+function simulerSessionExpiree(userId: string, profil: WebProfile): WebProfile {
+  const cleDemo = `demo-reconnexion:${userId}`;
+  if (!profil.onboardingTermine || lire<boolean>(cleDemo, false)) return profil;
+  ecrire(cleDemo, true);
+  const comptes = profil.comptesMarchands.map((c) =>
+    c.marchand === "Mango" && c.statut === "non_connecte"
+      ? {
+          ...c,
+          statut: "a_reconnecter" as const,
+          email: profil.contact.email,
+          vaultId: id("vault"),
+        }
+      : c,
+  );
+  const suivant = { ...profil, comptesMarchands: comptes };
+  ecrire(cle(userId), suivant);
+  return suivant;
+}
+
 export async function getProfile(userId: string): Promise<WebProfile> {
   await attendre(400);
   if (erreurSimulee()) throw new MockError("Impossible de charger ton profil.");
-  return lire<WebProfile>(cle(userId), profilVide(userId));
+  return simulerSessionExpiree(userId, lire<WebProfile>(cle(userId), profilVide(userId)));
 }
 
 export async function saveProfile(userId: string, patch: Partial<WebProfile>): Promise<WebProfile> {
@@ -36,7 +59,7 @@ export async function saveProfile(userId: string, patch: Partial<WebProfile>): P
   const actuel = lire<WebProfile>(cle(userId), profilVide(userId));
   const suivant = { ...actuel, ...patch, id: userId };
   ecrire(cle(userId), suivant);
-  return suivant;
+  return simulerSessionExpiree(userId, suivant);
 }
 
 /**

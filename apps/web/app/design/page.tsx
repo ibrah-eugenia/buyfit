@@ -309,6 +309,7 @@ export default function DesignPage() {
               <OrderStatusBadge key={s} statut={s} />
             ))}
             <Badge className="h-6 bg-success-soft px-2.5 text-success">Connecté</Badge>
+            <Badge className="h-6 bg-warning-soft px-2.5 text-warning">À reconnecter</Badge>
             <Badge className="h-6 bg-linen px-2.5 text-grey">Non connecté</Badge>
           </div>
         </Section>
