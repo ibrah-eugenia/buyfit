@@ -9,10 +9,14 @@ import { useCallback, useEffect, useState } from "react";
 import { browser } from "wxt/browser";
 import { api, USE_MOCK } from "@/lib/api";
 import { CAPTURE_STORAGE_KEY } from "@/lib/messages";
+import { Home } from "./Home";
+import { Wordmark } from "./Logo";
 
 // TODO(ibrahim) : remplacer par l'utilisateur connecté (auth Supabase via apps/web).
 const USER_ID = "demo-user";
 const POLL_MS = 3000;
+/** Ouvert dans le panneau du logo flottant (iframe sur Pinterest). */
+const EMBEDDED = new URLSearchParams(location.search).get("mode") === "embed";
 
 type Phase =
   | { kind: "idle" }
@@ -28,15 +32,29 @@ const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 export function App() {
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
 
-  const search = useCallback(async (capture: InspirationCapture) => {
+  // budgetMax absent (clic droit) → l'API prend le budget du profil.
+  const search = useCallback(
+    async (capture: InspirationCapture, budgetMax?: number, requetesSecours?: string[]) => {
     setPhase({ kind: "searching", capture });
     try {
-      const matches = await api.capture({ userId: USER_ID, capture });
+      const matches = await api.capture({
+        userId: USER_ID,
+        capture,
+        ...(budgetMax ? { budgetMax } : {}),
+        ...(requetesSecours?.length ? { requetesSecours } : {}),
+      });
       setPhase({ kind: "results", capture, matches });
     } catch (e) {
       setPhase({ kind: "error", message: errMsg(e) });
     }
-  }, []);
+    },
+    [],
+  );
+
+  const reset = () => {
+    void browser.storage.session.remove(CAPTURE_STORAGE_KEY);
+    setPhase({ kind: "idle" });
+  };
 
   // Le background dépose la capture dans storage.session : on lit l'existante puis on écoute.
   useEffect(() => {
@@ -53,18 +71,38 @@ export function App() {
   }, [search]);
 
   return (
-    <main>
-      <header>
-        <h1>BuyFit</h1>
+    <div className="app">
+      <header className="topbar">
+        <h1>
+          <Wordmark />
+        </h1>
         {USE_MOCK && <span className="badge">mock</span>}
+        <div className="topbar-actions">
+          {phase.kind !== "idle" && (
+            <button type="button" className="btn ghost small" onClick={reset}>
+              Nouvelle recherche
+            </button>
+          )}
+          {EMBEDDED && (
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label="Fermer BuyFit"
+              onClick={() => window.parent.postMessage({ type: "buyfit:close" }, "*")}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          )}
+        </div>
       </header>
 
-      {phase.kind === "idle" && (
-        <p className="hint">
-          Sur Pinterest, fais un clic droit sur une tenue → <b>« Trouver ce look avec BuyFit »</b>.
-        </p>
-      )}
+      {phase.kind === "idle" && <Home userId={USER_ID} />}
 
+      {phase.kind !== "idle" && (
+        <main className="content">
       {phase.kind === "searching" && (
         <>
           <img className="inspiration" src={phase.capture.imageUrl} alt="Inspiration" />
@@ -78,12 +116,18 @@ export function App() {
         <>
           <img className="inspiration" src={phase.capture.imageUrl} alt="Inspiration" />
           {phase.matches.length === 0 && <p className="hint">Aucun équivalent dans ton budget.</p>}
-          {phase.matches.map((p) => (
-            <ProductCard key={p.id} product={p} />
-          ))}
+          {phase.matches.length > 0 && (
+            <div className="results-row">
+              {phase.matches.map((p) => (
+                <ProductCard key={p.id} product={p} />
+              ))}
+            </div>
+          )}
         </>
       )}
-    </main>
+        </main>
+      )}
+    </div>
   );
 }
 

@@ -62,9 +62,36 @@ function status(orderId: string): OrderStatus {
 }
 
 export const mockApi: BuyFitApi = {
-  async capture() {
+  async identify() {
+    await wait(900);
+    return {
+      nom: "Blazer croisé en laine à carreaux bleu",
+      requete: "blazer croisé laine carreaux bleu homme",
+      requetesSecours: ["blazer carreaux bleu homme", "blazer bleu"],
+      categorie: "veste",
+      couleur: "bleu",
+      matiere: "laine",
+      genre: "homme",
+    };
+  },
+  async serp(req) {
+    await wait(1200);
+    return { requete: req.requete, resultats: PRODUCTS };
+  },
+  async search() {
+    await wait(1800);
+    return {
+      filtreIA: true,
+      resultats: [
+        { ...PRODUCTS[0]!, score: 0.9 },
+        { ...PRODUCTS[1]!, score: 0.7 },
+        { ...PRODUCTS[2]!, marque: "Uniqlo", url: "https://www.uniqlo.com/fr/", score: 0.6 },
+      ],
+    };
+  },
+  async capture(req) {
     await wait(1500);
-    return PRODUCTS;
+    return req.budgetMax ? PRODUCTS.filter((p) => p.prix <= req.budgetMax!) : PRODUCTS;
   },
   async tryOn(req) {
     await wait(1500);

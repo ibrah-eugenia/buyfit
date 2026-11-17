@@ -4,7 +4,7 @@ import type { ResolveImageMessage, ResolveImageResponse } from "@/lib/messages";
 import { largestFromSrcset, upgradePinimgUrl } from "@/lib/pinimg";
 
 export default defineContentScript({
-  matches: ["*://*.pinterest.com/*"],
+  matches: ["*://*.pinterest.com/*", "*://*.pinterest.fr/*"],
   main() {
     browser.runtime.onMessage.addListener((msg: unknown, _sender, sendResponse) => {
       const m = msg as ResolveImageMessage;

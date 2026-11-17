@@ -5,9 +5,18 @@
 import {
   ApiErrorSchema,
   CaptureResponseSchema,
+  IdentifiedItemSchema,
+  SerpResponseSchema,
+  SearchResponseSchema,
+  type SearchRequest,
+  type SearchResponse,
   OrderStatusSchema,
   TryOnResultSchema,
   type CaptureRequest,
+  type IdentifiedItem,
+  type IdentifyRequest,
+  type SerpRequest,
+  type SerpResponse,
   type OrderRequest,
   type OrderStatus,
   type ProductMatch,
@@ -40,6 +49,12 @@ async function request<S extends z.ZodType>(
 }
 
 export interface BuyFitApi {
+  /** POST /identify : zone sélectionnée → nom de l'article (modèle de vision HF). */
+  identify(req: IdentifyRequest): Promise<IdentifiedItem>;
+  /** POST /serp : Google Shopping brut via Bright Data SERP pour les mots-clés. */
+  serp(req: SerpRequest): Promise<SerpResponse>;
+  /** POST /search : Zara / Mango / Uniqlo en parallèle + filtre IA de similarité. */
+  search(req: SearchRequest): Promise<SearchResponse>;
   capture(req: CaptureRequest): Promise<ProductMatch[]>;
   tryOn(req: TryOnApiRequest): Promise<TryOnResult>;
   order(req: OrderRequest): Promise<OrderStatus>;
@@ -48,6 +63,9 @@ export interface BuyFitApi {
 }
 
 const httpApi: BuyFitApi = {
+  identify: (req) => request("POST", "/identify", IdentifiedItemSchema, req),
+  serp: (req) => request("POST", "/serp", SerpResponseSchema, req),
+  search: (req) => request("POST", "/search", SearchResponseSchema, req),
   capture: (req) => request("POST", "/capture", CaptureResponseSchema, req),
   tryOn: (req) => request("POST", "/tryon", TryOnResultSchema, req),
   order: (req) => request("POST", "/order", OrderStatusSchema, req),
