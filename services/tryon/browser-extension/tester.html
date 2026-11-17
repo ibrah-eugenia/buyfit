@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>BuyFit — Test d’essayage</title>
+    <link rel="icon" href="icon.png">
+    <link rel="stylesheet" href="tester.css">
+    <script type="module" src="tester.js"></script>
+  </head>
+  <body>
+    <main>
+      <header class="header">
+        <a class="brand" href="tester.html" aria-label="BuyFit, accueil du test"><img src="icon.png" alt="" width="36" height="36">BuyFit</a>
+        <span class="test-label">Test d’essayage</span>
+      </header>
+
+      <div class="intro">
+        <h1>Essaie ton prochain look.</h1>
+        <p>Ta photo, un vêtement, et le résultat directement ici.</p>
+      </div>
+
+      <section class="connection" aria-labelledby="connection-title">
+        <div class="connection-heading">
+          <h2 id="connection-title">Connexion au service</h2>
+          <span id="connection-badge" class="badge" role="status">Vérification…</span>
+          <button id="reconnect" class="secondary" type="button">Vérifier la connexion</button>
+        </div>
+        <p id="mode-message">Recherche du serveur BuyFit sur ton Mac…</p>
+        <p class="small"><a href="http://127.0.0.1:8000/tryon/upload" target="_blank" rel="noopener noreferrer">Ouvrir le service local</a> · Le modèle sera vérifié au lancement de l’essayage.</p>
+        <details id="server-help">
+          <summary>Comment démarrer le serveur ?</summary>
+          <p>Dans le terminal du projet, active l’environnement Python et lance le service. Garde ce terminal ouvert pendant le test.</p>
+          <pre><code>cd /Users/felixmachenaud/eugenia/hackathon/buyfit/services/tryon
+source .venv/bin/activate
+python -m uvicorn app:app --host 127.0.0.1 --port 8000 --no-access-log</code></pre>
+          <p>Le mode dépend des variables de ce terminal. Sans moteur local installé, utilise le mode Hugging Face décrit dans le README du service, ou le mode simulation pour vérifier l’affichage.</p>
+        </details>
+      </section>
+
+      <form id="tryon-form">
+        <fieldset id="images">
+          <legend class="sr-only">Les deux images de l’essayage</legend>
+          <div class="inputs">
+            <section class="image-card" aria-labelledby="person-title">
+              <div class="card-heading"><span class="step">01</span><h2 id="person-title">Ta photo</h2></div>
+              <p id="person-hint">De face, avec le buste et les bras visibles.</p>
+              <div class="preview-frame">
+                <span id="person-placeholder" class="placeholder">La photo de la personne<br>apparaîtra ici.</span>
+                <img id="person-preview" alt="Aperçu de la personne" hidden>
+              </div>
+              <label for="person">Choisir une photo</label>
+              <input id="person" name="person" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="person-hint image-limits">
+              <p id="person-file" class="filename" aria-live="polite">Aucune image sélectionnée.</p>
+            </section>
+            <section class="image-card" aria-labelledby="garment-title">
+              <div class="card-heading"><span class="step">02</span><h2 id="garment-title">Le vêtement</h2></div>
+              <p id="garment-hint">Un haut de face, sur un fond simple.</p>
+              <div class="preview-frame">
+                <span id="garment-placeholder" class="placeholder">Le vêtement à essayer<br>apparaîtra ici.</span>
+                <img id="garment-preview" alt="Aperçu du vêtement" hidden>
+              </div>
+              <label for="garment">Choisir un vêtement</label>
+              <input id="garment" name="garment" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="garment-hint image-limits">
+              <p id="garment-file" class="filename" aria-live="polite">Aucune image sélectionnée.</p>
+            </section>
+          </div>
+        </fieldset>
+        <p id="image-limits" class="small">JPEG, PNG ou WebP · 8 Mo maximum par image. Les aperçus restent dans cet onglet jusqu’au lancement.</p>
+        <p id="send-notice">Sélectionne les deux images et connecte le service pour commencer.</p>
+        <div class="form-actions">
+          <button id="generate" class="primary" type="submit" disabled>Générer l’essayage</button>
+          <button id="clear" class="secondary" type="button">Effacer les images</button>
+        </div>
+      </form>
+
+      <p id="progress" role="status" aria-live="polite"></p>
+      <p id="error" class="error" role="alert" hidden></p>
+
+      <section id="result" class="result" aria-labelledby="result-title" tabindex="-1" hidden>
+        <div class="result-heading"><span class="step">03</span><h2 id="result-title">Ton résultat</h2><span id="result-badge" class="badge"></span></div>
+        <p id="result-info"></p>
+        <div class="result-frame"><img id="result-image" alt="Résultat de l’essayage BuyFit"></div>
+        <div class="result-actions">
+          <a id="download" class="primary" download>Télécharger l’image</a>
+          <a id="open-image" class="secondary" target="_blank" rel="noopener noreferrer">Ouvrir en grand</a>
+        </div>
+        <p class="small">Télécharge l’image pour la garder. Le serveur conserve au maximum 20 résultats pendant 24 h ; l’aperçu reste disponible tant que cet onglet est ouvert.</p>
+      </section>
+
+      <footer>BuyFit · Outil de test du service d’essayage · Aucun compte ni token à saisir dans l’extension.</footer>
+    </main>
+  </body>
+</html>

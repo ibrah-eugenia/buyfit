@@ -1,0 +1,12 @@
+@font-face{font-family:Poppins;src:local("Poppins");font-display:swap}
+:root{--ink:#1f2a37;--muted:#5b6472;--line:#e6e3dc;--blue:#4e81ee;--sand:#f7f5f0}
+*{box-sizing:border-box}body{margin:0;background:#fff;color:var(--ink);font-family:Poppins,system-ui,sans-serif;line-height:1.6;font-size:16px}
+main{max-width:1040px;padding:24px;margin:auto}header{display:flex;justify-content:space-between;align-items:center;gap:16px;padding-bottom:24px;border-bottom:1px solid var(--line)}
+header a:first-child{font-size:24px;font-weight:700}a{color:var(--ink);text-underline-offset:4px}h1{text-align:center;font-size:clamp(28px,5vw,42px);line-height:1.15;margin:40px 0 24px}
+#mode{background:var(--sand);padding:16px;border-radius:12px}.inputs{display:grid;grid-template-columns:1fr 1fr;gap:24px}.inputs section{border:1px solid var(--line);border-radius:12px;padding:24px;min-width:0}
+label{display:block;font-size:20px;font-weight:600}p{color:var(--muted)}input{font:inherit;width:100%;min-height:44px}input::file-selector-button{font:inherit;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--sand);cursor:pointer}
+button,.download{display:inline-block;font:600 16px Poppins,system-ui,sans-serif;min-height:48px;padding:12px 24px;border:2px solid var(--blue);border-radius:999px;background:var(--blue);color:var(--ink);cursor:pointer;text-decoration:none}
+button:disabled{opacity:.6;cursor:wait}button:hover:not(:disabled),.download:hover{filter:brightness(.95)}:focus-visible{outline:3px solid var(--ink);outline-offset:4px}
+.preview{display:block;max-width:100%;height:280px;object-fit:contain;margin:20px auto 0}#error{padding:16px;border-left:4px solid #b4704e;background:var(--sand);color:var(--ink)}
+#result{margin-top:32px;padding-top:24px;border-top:1px solid var(--line)}#result-image{display:block;max-width:100%;max-height:760px;margin:20px auto;object-fit:contain}.result-actions{display:flex;flex-wrap:wrap;gap:20px;align-items:center}
+[hidden]{display:none!important}@media(max-width:600px){main{padding:16px}.inputs{grid-template-columns:1fr}.inputs section{padding:20px}header{align-items:flex-start}header a:last-child{font-size:14px}button{width:100%}}
