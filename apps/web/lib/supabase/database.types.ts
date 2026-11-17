@@ -261,31 +261,52 @@ export type Database = {
       };
       profiles: {
         Row: {
+          adresse: Json;
           budget_max: number;
+          contact: Json;
           created_at: string;
+          daltonisme: Json;
           devise: string;
+          genre: string | null;
           marques_preferees: string[];
           mensurations: Json;
+          morphologie: Json;
+          onboarding_termine: boolean;
+          poids_kg: number | null;
           taille: Json;
           updated_at: string;
           user_id: string;
         };
         Insert: {
+          adresse?: Json;
           budget_max?: number;
+          contact?: Json;
           created_at?: string;
+          daltonisme?: Json;
           devise?: string;
+          genre?: string | null;
           marques_preferees?: string[];
           mensurations?: Json;
+          morphologie?: Json;
+          onboarding_termine?: boolean;
+          poids_kg?: number | null;
           taille?: Json;
           updated_at?: string;
           user_id: string;
         };
         Update: {
+          adresse?: Json;
           budget_max?: number;
+          contact?: Json;
           created_at?: string;
+          daltonisme?: Json;
           devise?: string;
+          genre?: string | null;
           marques_preferees?: string[];
           mensurations?: Json;
+          morphologie?: Json;
+          onboarding_termine?: boolean;
+          poids_kg?: number | null;
           taille?: Json;
           updated_at?: string;
           user_id?: string;

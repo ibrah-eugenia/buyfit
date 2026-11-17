@@ -14,7 +14,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { signIn } from "@/lib/mocks";
+import { signIn } from "@/lib/data";
 import { LoginSchema, type LoginInput } from "@/lib/types";
 
 export default function LoginPage() {

@@ -14,7 +14,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { signUp } from "@/lib/mocks";
+import { signUp } from "@/lib/data";
 import { PASSWORD_RULES, SignupSchema, type SignupInput } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +22,7 @@ export default function SignupPage() {
   const router = useRouter();
   const { reload } = useSession();
   const [erreur, setErreur] = useState<string | null>(null);
+  const [emailEnvoye, setEmailEnvoye] = useState<string | null>(null);
   const {
     register,
     handleSubmit,
@@ -36,7 +37,11 @@ export default function SignupPage() {
   async function onSubmit(values: SignupInput) {
     setErreur(null);
     try {
-      await signUp(values);
+      const session = await signUp(values);
+      if (!session) {
+        setEmailEnvoye(values.email);
+        return;
+      }
       await reload();
       router.push("/onboarding");
     } catch (e) {
@@ -61,6 +66,14 @@ export default function SignupPage() {
       }
     >
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
+        {emailEnvoye && (
+          <Alert>
+            <AlertDescription>
+              Compte créé. Clique sur le lien envoyé à {emailEnvoye} pour confirmer ton email et
+              compléter ton profil.
+            </AlertDescription>
+          </Alert>
+        )}
         {erreur && (
           <Alert variant="destructive">
             <AlertDescription>{erreur}</AlertDescription>

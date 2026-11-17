@@ -10,7 +10,6 @@ import {
   OrderStatusSchema,
   ProductMatchSchema,
   TaillesSchema,
-  type Mensurations,
   type Tailles,
 } from "@buyfit/shared";
 import { z } from "zod";
@@ -20,13 +19,52 @@ export type { ActionResult } from "./merchant-accounts.schema";
 
 // ---------------------------------------------------------------- profil
 
+/** Mensurations du contrat + entrejambe (saisie sur le site). */
+const MensurationsProfilSchema = MensurationsSchema.extend({
+  entrejambeCm: z.number().positive().optional(),
+});
+type MensurationsProfil = z.infer<typeof MensurationsProfilSchema>;
+
+export const GenreSchema = z.enum(["femme", "homme", "non_precise"]);
+export const MorphologieSchema = z
+  .object({
+    epaules: z.enum(["etroites", "moyennes", "larges"]),
+    ventre: z.enum(["plat", "moyen", "arrondi"]),
+    hanches: z.enum(["etroites", "moyennes", "larges"]),
+    coupe: z.enum(["ajustee", "normale", "ample"]),
+  })
+  .partial();
+const texte = (max: number) => z.string().trim().max(max);
+export const ContactSchema = z
+  .object({
+    prenom: texte(80),
+    nom: texte(80),
+    email: z.email("Adresse email invalide"),
+    telephone: texte(30),
+  })
+  .partial();
+export const AdresseSchema = z
+  .object({ numeroEtRue: texte(200), codePostal: texte(10), ville: texte(100) })
+  .partial();
+export const DaltonismeSchema = z.object({
+  actif: z.boolean(),
+  type: z.enum(["protanopie", "deuteranopie", "tritanopie", "achromatopsie"]).optional(),
+});
+
 export const ProfileSchema = z.object({
   userId: z.uuid(),
   taille: TaillesSchema,
-  mensurations: MensurationsSchema,
+  mensurations: MensurationsProfilSchema,
   budgetMax: z.number().nonnegative(),
   devise: CurrencySchema,
   marquesPreferees: z.array(z.string()),
+  genre: GenreSchema.nullable(),
+  poidsKg: z.number().nullable(),
+  morphologie: MorphologieSchema,
+  contact: ContactSchema,
+  adresse: AdresseSchema,
+  daltonisme: DaltonismeSchema,
+  onboardingTermine: z.boolean(),
   updatedAt: IsoDateTimeSchema,
 });
 export type Profile = z.infer<typeof ProfileSchema>;
@@ -35,20 +73,30 @@ export type Profile = z.infer<typeof ProfileSchema>;
 export const ProfileUpdateSchema = z
   .object({
     taille: TaillesSchema,
-    mensurations: MensurationsSchema,
+    mensurations: MensurationsProfilSchema,
     budgetMax: z.number().nonnegative("Budget négatif").max(100_000, "Budget trop élevé"),
     devise: CurrencySchema,
     marquesPreferees: z
       .array(z.string().trim().min(1).max(50))
       .max(30, "30 marques maximum")
       .transform((ms) => [...new Set(ms)]),
+    genre: GenreSchema,
+    poidsKg: z.number().min(30, "Poids : minimum 30").max(250, "Poids : maximum 250"),
+    morphologie: MorphologieSchema,
+    contact: ContactSchema,
+    adresse: AdresseSchema,
+    daltonisme: DaltonismeSchema,
+    onboardingTermine: z.boolean(),
   })
   .partial();
 export type ProfileUpdate = z.input<typeof ProfileUpdateSchema>;
 
 /** Le jsonb en base peut avoir été écrit par un autre client : on lit sans planter. */
 const readTailles = (v: unknown): Tailles => TaillesSchema.catch({}).parse(v);
-const readMensurations = (v: unknown): Mensurations => MensurationsSchema.catch({}).parse(v);
+const readMensurations = (v: unknown): MensurationsProfil =>
+  MensurationsProfilSchema.catch({}).parse(v);
+const read = <T extends z.ZodType>(schema: T, v: unknown, fallback: z.infer<T>): z.infer<T> =>
+  schema.catch(fallback).parse(v);
 
 export function toProfile(row: Tables<"profiles">): Profile {
   return ProfileSchema.parse({
@@ -58,6 +106,13 @@ export function toProfile(row: Tables<"profiles">): Profile {
     budgetMax: Number(row.budget_max),
     devise: row.devise,
     marquesPreferees: row.marques_preferees,
+    genre: read(GenreSchema.nullable(), row.genre, null),
+    poidsKg: row.poids_kg === null ? null : Number(row.poids_kg),
+    morphologie: read(MorphologieSchema, row.morphologie, {}),
+    contact: read(ContactSchema, row.contact, {}),
+    adresse: read(AdresseSchema, row.adresse, {}),
+    daltonisme: read(DaltonismeSchema, row.daltonisme, { actif: false }),
+    onboardingTermine: row.onboarding_termine,
     updatedAt: row.updated_at,
   });
 }

@@ -24,14 +24,14 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { connectMerchant, disconnectMerchant } from "@/lib/mocks";
+import { connectMerchant, disconnectMerchant } from "@/lib/data";
 import type { CompteMarchandWeb } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 /**
  * Comptes marchands OPTIONNELS. Sans compte connecté, l'agent commande en invité.
- * Le mot de passe n'est jamais saisi ni stocké par BuyFit : il va dans le coffre H Company,
- * on ne garde que la référence `vaultId`.
+ * Le mot de passe traverse notre serveur en mémoire jusqu'au coffre H Company, sans jamais être
+ * enregistré chez BuyFit : la base ne garde que la référence du coffre.
  */
 export const STATUT: Record<CompteMarchandWeb["statut"], { label: string; className: string }> = {
   connecte: { label: "Connecté", className: "bg-success-soft text-success" },
@@ -43,6 +43,7 @@ export function MerchantAccounts() {
   const { session, profile, setProfile } = useSession();
   const [cible, setCible] = useState<CompteMarchandWeb | null>(null);
   const [email, setEmail] = useState("");
+  const [motDePasse, setMotDePasse] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState<string | null>(null);
 
@@ -53,6 +54,7 @@ export function MerchantAccounts() {
     if (!session || !profile) return;
     setCible(c);
     setEmail(c.email ?? profile.contact.email ?? session.email);
+    setMotDePasse("");
     setErreur(null);
   }
 
@@ -60,14 +62,17 @@ export function MerchantAccounts() {
     if (!cible || !session || !profile) return;
     if (!/^\S+@\S+\.\S+$/.test(email))
       return setErreur("Saisis l'email de ton compte " + cible.marchand + ".");
+    if (!motDePasse)
+      return setErreur("Saisis le mot de passe de ton compte " + cible.marchand + ".");
     setErreur(null);
     setEnCours(cible.marchand);
     try {
-      const maj = await connectMerchant(session.userId, cible.marchand, email);
+      const maj = await connectMerchant(session.userId, cible.marchand, email, motDePasse);
       setProfile({ ...profile, comptesMarchands: maj });
       toast.success(
         `Compte ${cible.marchand} ${cible.statut === "a_reconnecter" ? "reconnecté" : "connecté"}`,
       );
+      setMotDePasse("");
       setCible(null);
     } catch (e) {
       setErreur(e instanceof Error ? e.message : "Connexion impossible.");
@@ -182,7 +187,14 @@ export function MerchantAccounts() {
         })}
       </ul>
 
-      <Dialog open={!!cible} onOpenChange={(o) => !o && setCible(null)}>
+      <Dialog
+        open={!!cible}
+        onOpenChange={(o) => {
+          if (o) return;
+          setMotDePasse("");
+          setCible(null);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
@@ -205,6 +217,18 @@ export function MerchantAccounts() {
               aria-invalid={!!erreur}
               aria-describedby={erreur ? "email-marchand-err" : "coffre"}
             />
+            <Label htmlFor="mdp-marchand" className="mt-2">
+              Mot de passe du compte {cible?.marchand}
+            </Label>
+            <Input
+              id="mdp-marchand"
+              type="password"
+              autoComplete="off"
+              value={motDePasse}
+              onChange={(e) => setMotDePasse(e.target.value)}
+              aria-invalid={!!erreur}
+              aria-describedby={erreur ? "email-marchand-err" : "coffre"}
+            />
             {erreur && (
               <p
                 id="email-marchand-err"
@@ -220,8 +244,9 @@ export function MerchantAccounts() {
             className="flex items-start gap-2 rounded-xl bg-linen p-3 text-caption text-copy"
           >
             <ShieldCheck className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
-            Tu saisiras ton mot de passe dans le coffre sécurisé de notre partenaire H Company.
-            BuyFit ne le voit ni ne le stocke jamais.
+            Ton mot de passe est transmis directement au coffre sécurisé de notre partenaire H
+            Company, qui le garde chiffré. BuyFit ne l&apos;enregistre jamais : il ne fait que
+            transiter, sans être conservé ni journalisé.
           </p>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => setCible(null)}>
@@ -229,7 +254,7 @@ export function MerchantAccounts() {
             </Button>
             <Button type="button" onClick={() => void connecter()} disabled={!!enCours}>
               {enCours && <Loader2 className="animate-spin" aria-hidden="true" />}
-              Continuer vers le coffre
+              Connecter le compte
             </Button>
           </DialogFooter>
         </DialogContent>

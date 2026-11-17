@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { CartItem, SearchResult, Session, WebProfile } from "@/lib/types";
-import { getProfile, getSession, signOut } from "@/lib/mocks";
+import { getProfile, getSession, signOut } from "@/lib/data";
 
 /* ---------------------------- Session + profil ---------------------------- */
 
