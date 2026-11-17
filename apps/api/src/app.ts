@@ -5,6 +5,12 @@ import type { z } from "zod";
 import {
   CaptureRequestSchema,
   CaptureResponseSchema,
+  IdentifiedItemSchema,
+  IdentifyRequestSchema,
+  SearchRequestSchema,
+  SearchResponseSchema,
+  SerpRequestSchema,
+  SerpResponseSchema,
   OrderRequestSchema,
   OrderStatusSchema,
   TryOnApiRequestSchema,
@@ -14,7 +20,7 @@ import {
 } from "@buyfit/shared";
 import { config } from "./config.js";
 import { HttpError, upstream } from "./errors.js";
-import { findMatches } from "./modules/brightdata.js";
+import { findMatches, serpShopping } from "./modules/brightdata.js";
 import { confirmOrderSession, getSessionState, startOrderSession } from "./modules/hcompany.js";
 import {
   createOrder,
@@ -24,6 +30,8 @@ import {
   type OrderRecord,
 } from "./modules/supabase.js";
 import { tryOn } from "./modules/tryon.js";
+import { searchStores } from "./modules/search.js";
+import { identifyItem } from "./modules/vision.js";
 
 const allowedOrigins = config.CORS_ORIGINS?.split(",")
   .map((s) => s.trim())
@@ -107,8 +115,35 @@ app.get("/health", (c) => c.json({ ok: true, mocks: config.mocks }));
 app.post("/capture", async (c) => {
   const req = await body(c, CaptureRequestSchema);
   const profile = await requireProfile(req.userId);
-  const matches = await call("brightdata", () => findMatches(req.capture, profile));
+  const budgetMax = req.budgetMax ?? profile.budgetMax;
+  const matches = await call("brightdata", () =>
+    findMatches(req.capture, { ...profile, budgetMax }, req.requetesSecours),
+  );
   return c.json(CaptureResponseSchema.parse(matches));
+});
+
+// POST /identify → IdentifiedItem (zone sélectionnée → nom de l'article, modèle HF)
+app.post("/identify", async (c) => {
+  const req = await body(c, IdentifyRequestSchema);
+  await requireProfile(req.userId);
+  const item = await call("vision", () => identifyItem(req.imageDataUrl));
+  return c.json(IdentifiedItemSchema.parse(item));
+});
+
+// POST /serp → { requete, resultats } (Google Shopping brut via Bright Data SERP)
+app.post("/serp", async (c) => {
+  const req = await body(c, SerpRequestSchema);
+  await requireProfile(req.userId);
+  const res = await call("brightdata", () => serpShopping(req.requete, req.requetesSecours));
+  return c.json(SerpResponseSchema.parse(res));
+});
+
+// POST /search → { resultats, filtreIA } (Zara / Mango / Uniqlo + filtre IA de similarité)
+app.post("/search", async (c) => {
+  const req = await body(c, SearchRequestSchema);
+  await requireProfile(req.userId);
+  const res = await call("search", () => searchStores(req));
+  return c.json(SearchResponseSchema.parse(res));
 });
 
 // POST /tryon → TryOnResult (proxy vers services/tryon)
