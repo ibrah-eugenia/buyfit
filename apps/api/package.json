@@ -8,7 +8,9 @@
     "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
     "start": "tsx --env-file-if-exists=../../.env src/index.ts",
     "build": "tsc --noEmit",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "h:agents": "tsx --env-file-if-exists=../../.env scripts/h-agents.ts",
+    "h:order-test": "tsx --env-file-if-exists=../../.env scripts/h-order-test.ts"
   },
   "dependencies": {
     "@buyfit/shared": "workspace:*",
