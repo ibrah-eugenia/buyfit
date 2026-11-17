@@ -13,7 +13,6 @@ export default tseslint.config(
       "**/.output/**",
       "**/.wxt/**",
       "**/.next/**",
-      "apps/web/**",
       "services/**",
     ],
   },
@@ -34,6 +33,10 @@ export default tseslint.config(
     languageOptions: { globals: { ...globals.browser, ...globals.webextensions } },
     plugins: { "react-hooks": reactHooks },
     rules: reactHooks.configs.recommended.rules,
+  },
+  {
+    files: ["apps/web/**/*.{ts,tsx}"],
+    languageOptions: { globals: { ...globals.browser, ...globals.node } },
   },
   prettier,
 );

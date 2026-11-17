@@ -1,0 +1,27 @@
+{
+  "name": "@buyfit/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Plateforme BuyFit (Next.js). Pour l'instant : couche données Supabase (lib/supabase).",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@buyfit/shared": "workspace:*",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.119.0",
+    "hai-agents": "^1.5.1",
+    "next": "^16.4.6",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "server-only": "^0.0.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "typescript": "~6.0.3"
+  }
+}
