@@ -1,34 +1,54 @@
 # apps/web — Plateforme BuyFit (Next.js)
 
-**Responsables : Antonin & Thomas.**
+**Responsables : Antonin & Thomas.** Next.js 16 (App Router), TypeScript strict, Tailwind CSS 4,
+shadcn/ui, lucide-react, react-hook-form + zod.
 
-## État actuel
+## Lancer
 
-Le package `@buyfit/web` existe déjà (Thomas) avec la couche données dans `lib/supabase/`
-(auth, profil, photos, historique, comptes marchands). `package.json` et `tsconfig.json` sont
-volontairement minimaux, sans pages, pour que `pnpm typecheck` et `pnpm lint` vérifient ce code.
-Mode d'emploi des fonctions : [`docs/data-access.md`](../../docs/data-access.md).
+Depuis la racine du repo :
 
-## Ajouter Next.js (Antonin)
+```bash
+pnpm install
+pnpm --filter @buyfit/web dev      # http://localhost:3000
+```
 
-`create-next-app` refuse un dossier qui contient déjà un `package.json` : ne pas le lancer ici.
-Les dépendances (`next`, `react`, `react-dom`, Supabase, zod) sont déjà installées. Il suffit de :
+Le build utilise webpack (`next build --webpack`) : le contrat `@buyfit/shared` est publié en
+TypeScript source avec des imports en `.js`, que webpack résout grâce à `extensionAlias`.
 
-1. ajouter dans `package.json` les scripts `"dev": "next dev"`, `"build": "next build"`,
-   `"start": "next start"` ;
-2. créer `app/layout.tsx`, `app/page.tsx` et `next.config.ts` à la racine de `apps/web`
-   (pas de `src/` : le code est importé en `@/lib/supabase/...`) ;
-3. brancher l'auth en 2 fichiers, voir [`docs/auth-extension.md`](../../docs/auth-extension.md) :
-   `app/auth/callback/route.ts` et `proxy.ts` ;
-4. copier les variables `NEXT_PUBLIC_SUPABASE_*` (voir `.env.example`) dans `apps/web/.env.local`.
+## Pages
 
-Alternative : lancer `create-next-app` dans un dossier temporaire et recopier `app/`,
-`next.config.ts` et les réglages utiles de son `tsconfig.json`.
+| Route         | Contenu                                                                                                                                                                                    |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/`           | Landing : pitch, « Installer l'extension », « Créer mon compte »                                                                                                                           |
+| `/signup`     | Email, mot de passe (règles affichées en direct), confirmation                                                                                                                             |
+| `/login`      | Connexion                                                                                                                                                                                  |
+| `/onboarding` | 7 étapes avec barre de progression : genre, photos (corps entier + tête de profil), silhouette, morphologie, marques, contact et livraison (+ daltonisme), comptes marchands (facultatifs) |
+| `/search`     | Recherche écrite ou vocale (Web Speech API, fr-FR), % de ressemblance, taille conseillée, essayage « Sur moi », ajout au panier                                                            |
+| `/checkout`   | Panier par marque, livraison à domicile ou en point relais, lancement de l'agent (il s'arrête avant le paiement)                                                                           |
+| `/dashboard`  | Looks capturés, produits trouvés, essayages, commandes et leurs statuts                                                                                                                    |
+| `/settings`   | Modifier tout le profil, connecter / déconnecter les comptes marchands                                                                                                                     |
+| `/design`     | Système de design : logo, couleurs, typo, rayons, composants, états                                                                                                                        |
 
-## Ce que la brique doit faire
+## Données
+
+- **Tout passe par `@/lib/mocks`** (mocks typés, stockés dans le `localStorage` du navigateur),
+  en attendant le branchement des fonctions de Thomas dans `lib/supabase/` (voir ci-dessous). Pour brancher le vrai back-end, on
+  remplace les exports de `lib/mocks/index.ts` : les pages n'importent que depuis là.
+- Ajouter `?erreur=1` à n'importe quelle URL affiche les états d'erreur. Chercher « erreur » sur
+  `/search` aussi.
+- Types : `lib/types` étend `@buyfit/shared` avec les champs validés par l'équipe et absents du
+  contrat. La proposition de changements pour Ibrahim est dans
+  [`PROPOSITION-shared.md`](PROPOSITION-shared.md). `packages/shared` n'est pas modifié.
+- Aucun mot de passe de compte marchand n'est saisi ni stocké par le site : seulement `vaultId`.
+
+## Couche données Supabase (`lib/supabase/`)
+
+Fonctions typées prêtes à brancher à la place des mocks. Mode d'emploi :
+[`docs/data-access.md`](../../docs/data-access.md).
 
 1. **Auth** : email + mot de passe, Google, et liaison de l'extension (`lib/supabase/auth.ts`,
-   `extension-bridge.ts`). Jamais la service_role key côté navigateur.
+   `extension-bridge.ts`). Jamais la service_role key côté navigateur. Brancher
+   `app/auth/callback/route.ts` et `proxy.ts`, voir [`docs/auth-extension.md`](../../docs/auth-extension.md).
 2. **Profil** : `getProfile` / `upsertProfile`, photos avec `uploadUserPhoto` (bucket privé
    `user-photos`, photos plein pied pour l'essayage).
 3. **Comptes marchands** : `connectMerchantAccount` envoie les identifiants dans un vault H Company.
@@ -36,10 +56,19 @@ Alternative : lancer `create-next-app` dans un dossier temporaire et recopier `a
 4. **Historique** : `listCaptures`, `listTryons`, `listOrders` (avec `agentViewUrl` pour revoir ce
    qu'a fait l'agent).
 
-Toutes les entrées et sorties sont validées avec zod, sur les schémas de `@buyfit/shared`.
-
-## Données
-
+Variables `NEXT_PUBLIC_SUPABASE_*` : voir `.env.example`, à copier dans `apps/web/.env.local`.
 Schéma : [`supabase/migrations/`](../../supabase/migrations) (snake_case en base, camelCase côté TS,
 conversion dans `lib/supabase/schemas.ts`). Après une migration, régénérer
 `lib/supabase/database.types.ts` (voir `docs/data-access.md`).
+
+## Charte
+
+Tokens dans `app/globals.css` (`bg-brand`, `bg-blush`, `bg-linen`, `text-grey`, `text-display`…),
+branchés sur les variables shadcn (`primary`, `accent`, `muted`…). Logo et palette exportés pour
+l'extension dans [`docs/brand/`](../../docs/brand).
+
+## Qualité
+
+```bash
+pnpm lint && pnpm format:check && pnpm typecheck   # depuis la racine
+```

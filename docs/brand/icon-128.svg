@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="BuyFit">
+  <rect width="128" height="128" rx="28.16" fill="#7A1F2B"/>
+  <svg x="42.88" y="26.88" width="42.24" height="74.24" viewBox="15 -8 100 176">
+    <path d="M30 140 V20 H64 A30 30 0 0 1 64 80 H30 H70 A30 30 0 0 1 70 140 Z" fill="none" stroke="#FFFFFF" stroke-width="24" stroke-linejoin="round"/>
+    <line x1="62" y1="-6" x2="62" y2="166" stroke="#FFFFFF" stroke-width="12"/>
+  </svg>
+</svg>

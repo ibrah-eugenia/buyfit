@@ -27,8 +27,14 @@ const DEMO_PROFILE: UserProfile = UserProfileSchema.parse({
   mensurations: { hauteurCm: 168 },
   budgetMax: 80,
   devise: "EUR",
-  marquesPreferees: ["Zara", "Mango", "COS"],
-  comptesMarchands: [{ marchand: "Zara", domaine: "zara.com" }],
+  marquesPreferees: ["Uniqlo", "Zara", "COS"],
+  comptesMarchands: [
+    {
+      marchand: "Uniqlo",
+      domaine: "uniqlo.com",
+      ...(config.HAI_DEMO_VAULT_ID ? { vaultId: config.HAI_DEMO_VAULT_ID } : {}),
+    },
+  ],
 });
 
 // ---------- mock ----------

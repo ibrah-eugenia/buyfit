@@ -13,6 +13,7 @@ export default tseslint.config(
       "**/.output/**",
       "**/.wxt/**",
       "**/.next/**",
+      "**/next-env.d.ts",
       "services/**",
     ],
   },
@@ -29,14 +30,16 @@ export default tseslint.config(
     },
   },
   {
-    files: ["apps/extension/**/*.{ts,tsx}"],
-    languageOptions: { globals: { ...globals.browser, ...globals.webextensions } },
+    files: ["apps/web/**/*.{ts,tsx}"],
+    languageOptions: { globals: { ...globals.browser } },
     plugins: { "react-hooks": reactHooks },
     rules: reactHooks.configs.recommended.rules,
   },
   {
-    files: ["apps/web/**/*.{ts,tsx}"],
-    languageOptions: { globals: { ...globals.browser, ...globals.node } },
+    files: ["apps/extension/**/*.{ts,tsx}"],
+    languageOptions: { globals: { ...globals.browser, ...globals.webextensions } },
+    plugins: { "react-hooks": reactHooks },
+    rules: reactHooks.configs.recommended.rules,
   },
   prettier,
 );

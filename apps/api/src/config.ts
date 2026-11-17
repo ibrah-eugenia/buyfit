@@ -12,9 +12,13 @@ const EnvSchema = z.object({
 
   HAI_API_KEY: z.string().optional(),
   HAI_AGENT_ID: z.string().default("h/web-surfer-pro"),
+  /** Vault H contenant les logins marchands du profil de démo (mock Supabase). */
+  HAI_DEMO_VAULT_ID: z.string().optional(),
 
   BRIGHTDATA_API_TOKEN: z.string().optional(),
   BRIGHTDATA_SERP_ZONE: z.string().default("serp_api1"),
+  /** Google Lens via Bright Data (recherche par image). Désactivé : renvoie no_local_parser (17/11/2026). */
+  BRIGHTDATA_USE_LENS: bool,
 
   SUPABASE_URL: z.string().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),

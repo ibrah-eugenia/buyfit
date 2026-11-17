@@ -112,7 +112,7 @@ function ProductCard({ product }: { product: ProductMatch }) {
           userId: USER_ID,
           productId: product.id,
           productUrl: product.url,
-          taille,
+          taille: taille.trim(),
         }),
       );
     } catch (e) {
@@ -153,14 +153,24 @@ function ProductCard({ product }: { product: ProductMatch }) {
             <button onClick={doTryOn} disabled={tryOn === "loading"}>
               {tryOn === "loading" ? "Essayage…" : "Essayer"}
             </button>
-            {product.tailleDisponibles.length > 0 && (
+            {product.tailleDisponibles.length > 0 ? (
               <select value={taille} onChange={(e) => setTaille(e.target.value)}>
                 {product.tailleDisponibles.map((t) => (
                   <option key={t}>{t}</option>
                 ))}
               </select>
+            ) : (
+              // Tailles inconnues (Google Shopping ne les donne pas) : saisie libre.
+              <input
+                className="size"
+                value={taille}
+                onChange={(e) => setTaille(e.target.value)}
+                placeholder="Taille"
+                aria-label="Taille"
+                size={5}
+              />
             )}
-            <button className="primary" onClick={doOrder} disabled={!taille}>
+            <button className="primary" onClick={doOrder} disabled={!taille.trim()}>
               Acheter
             </button>
           </div>

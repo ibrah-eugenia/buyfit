@@ -6,7 +6,7 @@ export interface ResolveImageMessage {
   srcUrl: string;
 }
 
-export type ResolveImageResponse = Pick<InspirationCapture, "imageUrl" | "pinUrl">;
+export type ResolveImageResponse = Pick<InspirationCapture, "imageUrl" | "pinUrl" | "description">;
 
 /** Clé storage.session où le background dépose la dernière capture (lue par le side panel). */
 export const CAPTURE_STORAGE_KEY = "buyfit:capture";
