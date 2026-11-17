@@ -1,0 +1,125 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/*
+ * Charte BuyFit v1 — voir docs/brand/.
+ * Les couleurs de marque sont exposées en utilitaires Tailwind (bg-brand, text-ink, bg-linen…)
+ * et branchées sur les variables shadcn (primary, accent, muted…).
+ */
+@theme {
+  --color-brand: #7a1f2b;
+  --color-brand-deep: #5c1420;
+  --color-blush: #f3d6db;
+  --color-ink: #111111;
+  --color-copy: #333333;
+  --color-grey: #6b6b6b;
+  --color-linen: #f7f5f2;
+  --color-line: #e6e2dc;
+  --color-line-soft: #efece8;
+  --color-success: #2f6b3f;
+  --color-success-soft: #e3efe5;
+  --color-warning: #8a5a00;
+  --color-warning-soft: #f8ecd2;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  /* Échelle typo de la charte : titre 36, sous-titre 20, texte 15, légende 12 */
+  --text-display: 36px;
+  --text-display--line-height: 1.1;
+  --text-display--letter-spacing: -0.03em;
+  --text-title: 20px;
+  --text-title--line-height: 1.3;
+  --text-title--letter-spacing: -0.01em;
+  --text-body: 15px;
+  --text-body--line-height: 1.5;
+  --text-caption: 12px;
+  --text-caption--line-height: 1.4;
+  --text-overline: 12px;
+  --text-overline--line-height: 1.3;
+  --text-overline--letter-spacing: 0.08em;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  /* Rayons : 12 px éléments et cartes, 16 px panneaux */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-3xl: 24px;
+  --radius-4xl: 999px;
+}
+
+:root {
+  --radius: 12px;
+  --background: #ffffff;
+  --foreground: #111111;
+  --card: #ffffff;
+  --card-foreground: #111111;
+  --popover: #ffffff;
+  --popover-foreground: #111111;
+  --primary: #7a1f2b;
+  --primary-foreground: #ffffff;
+  --secondary: #f7f5f2;
+  --secondary-foreground: #111111;
+  --muted: #f7f5f2;
+  --muted-foreground: #6b6b6b;
+  --accent: #f3d6db;
+  --accent-foreground: #5c1420;
+  --destructive: #b42318;
+  --border: #e6e2dc;
+  --input: #d9d5cf;
+  --ring: #7a1f2b;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  html {
+    @apply font-sans;
+  }
+  /* Les fieldsets ont une largeur minimale = contenu : sans ça, un carrousel fait déborder la page. */
+  fieldset {
+    min-width: 0;
+  }
+}
+
+@layer utilities {
+  .overline-label {
+    @apply text-overline font-semibold text-grey uppercase;
+  }
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}

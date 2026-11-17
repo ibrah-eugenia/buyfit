@@ -1,0 +1,18 @@
+/* Tokens BuyFit v1 — à importer dans l'extension (side panel) pour rester aligné avec le site. */
+:root {
+  --bf-bordeaux: #7a1f2b;
+  --bf-bordeaux-profond: #5c1420;
+  --bf-rose-poudre: #f3d6db;
+  --bf-encre: #111111;
+  --bf-texte: #333333;
+  --bf-gris: #6b6b6b;
+  --bf-lin: #f7f5f2;
+  --bf-bordure: #e6e2dc;
+  --bf-bordure-douce: #efece8;
+  --bf-blanc: #ffffff;
+
+  --bf-font: "Inter", system-ui, sans-serif;
+  --bf-rayon: 12px;
+  --bf-rayon-compact: 10px;
+  --bf-rayon-panneau: 16px;
+}
