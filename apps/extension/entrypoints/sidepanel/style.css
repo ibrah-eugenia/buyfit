@@ -1,0 +1,139 @@
+:root {
+  --bg: #fff;
+  --fg: #111;
+  --muted: #666;
+  --accent: #e60023;
+  --border: #e5e5e5;
+  color-scheme: light dark;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161616;
+    --fg: #f2f2f2;
+    --muted: #a0a0a0;
+    --border: #2c2c2c;
+  }
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+}
+main {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+h1 {
+  font-size: 20px;
+  margin: 0;
+}
+.badge {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #ffd54f;
+  color: #000;
+}
+.hint,
+.loading {
+  color: var(--muted);
+}
+.error {
+  color: var(--accent);
+  font-size: 13px;
+}
+.inspiration {
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  border-radius: 12px;
+}
+.card {
+  display: flex;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+}
+.card > img {
+  width: 96px;
+  height: 128px;
+  object-fit: cover;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+.brand {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.name {
+  font-weight: 600;
+}
+.price {
+  font-weight: 700;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: auto;
+}
+button,
+select {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.order {
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: auto;
+}
+.order a {
+  color: var(--accent);
+}
+.order.commandee b {
+  color: #2e7d32;
+}
+.order.echec b {
+  color: var(--accent);
+}

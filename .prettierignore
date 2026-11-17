@@ -1,0 +1,7 @@
+node_modules
+dist
+.output
+.wxt
+.next
+pnpm-lock.yaml
+services/tryon

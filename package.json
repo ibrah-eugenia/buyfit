@@ -1,0 +1,33 @@
+{
+  "name": "buyfit",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "BuyFit — de l'inspiration Pinterest à la commande, en un clic.",
+  "license": "MIT",
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "dev:api": "pnpm --filter @buyfit/api dev",
+    "dev:ext": "pnpm --filter @buyfit/extension dev",
+    "build:ext": "pnpm --filter @buyfit/extension build",
+    "build:api": "pnpm --filter @buyfit/api build",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "pnpm -r --parallel typecheck"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.15.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.14.0",
+    "prettier": "^3.10.1",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.73.0"
+  }
+}
