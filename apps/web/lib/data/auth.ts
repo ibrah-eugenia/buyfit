@@ -16,6 +16,9 @@ function traduire(message: string): string {
     return "Confirme d'abord ton email : clique sur le lien reçu par mail.";
   if (m.includes("rate limit") || m.includes("too many"))
     return "Trop de tentatives. Patiente une minute puis réessaie.";
+  if (m.includes("email address") && m.includes("invalid"))
+    return "Cette adresse email est refusée. Utilise une autre adresse.";
+  if (m.includes("signups not allowed")) return "Les inscriptions sont fermées pour le moment.";
   if (m.includes("password")) return "Mot de passe refusé : choisis-en un plus solide.";
   return "Le service de connexion ne répond pas. Réessaie.";
 }
