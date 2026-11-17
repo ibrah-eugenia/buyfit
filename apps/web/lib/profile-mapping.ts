@@ -22,7 +22,7 @@ export const versEtape = {
   morpho: (p: WebProfile): { morphologie?: Morphologie } => ({
     morphologie: p.morphologie as Morphologie,
   }),
-  marques: (p: WebProfile) => ({ marquesPreferees: p.marquesPreferees }),
+  marques: (p: WebProfile) => ({ budgetMax: p.budgetMax, marquesPreferees: p.marquesPreferees }),
   contact: (p: WebProfile, emailSession: string): Partial<ContactStep> => ({
     contact: { email: emailSession, ...p.contact } as ContactStep["contact"],
     adresse: p.adresse as ContactStep["adresse"],

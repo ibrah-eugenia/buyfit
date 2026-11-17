@@ -259,7 +259,12 @@ function SearchView() {
 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {filtres.map((r) => (
-                <ResultCard key={r.id} result={r} avatarUrl={profile?.photoCorpsUrl} />
+                <ResultCard
+                  key={r.id}
+                  result={r}
+                  avatarUrl={profile?.photoCorpsUrl}
+                  budgetMax={profile?.budgetMax}
+                />
               ))}
             </div>
           </div>

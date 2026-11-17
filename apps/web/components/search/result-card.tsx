@@ -10,7 +10,15 @@ import { Button } from "@/components/ui/button";
 import type { SearchResult } from "@/lib/types";
 import { cn, formatPrix } from "@/lib/utils";
 
-export function ResultCard({ result, avatarUrl }: { result: SearchResult; avatarUrl?: string }) {
+export function ResultCard({
+  result,
+  avatarUrl,
+  budgetMax,
+}: {
+  result: SearchResult;
+  avatarUrl?: string;
+  budgetMax?: number;
+}) {
   const { add } = useCart();
   const [taille, setTaille] = useState(result.tailleConseillee);
   const [vue, setVue] = useState<"produit" | "essayage">(
@@ -83,6 +91,11 @@ export function ResultCard({ result, avatarUrl }: { result: SearchResult; avatar
           <p className="text-[15px] font-bold text-brand">
             {formatPrix(result.prix, result.devise)}
           </p>
+          {budgetMax !== undefined && result.prix > budgetMax && (
+            <p className="text-caption font-medium text-warning">
+              Au-dessus de ton budget ({formatPrix(budgetMax)})
+            </p>
+          )}
         </div>
         <p className="flex items-start gap-2 rounded-[10px] bg-linen p-2.5 text-caption text-copy">
           <Info className="mt-px size-3.5 shrink-0 text-brand" aria-hidden="true" />

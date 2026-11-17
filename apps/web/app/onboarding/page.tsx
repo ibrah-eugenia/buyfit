@@ -23,7 +23,7 @@ const ETAPES = [
   "Photos",
   "Silhouette",
   "Morphologie",
-  "Marques",
+  "Budget et marques",
   "Contact",
   "Comptes",
 ] as const;

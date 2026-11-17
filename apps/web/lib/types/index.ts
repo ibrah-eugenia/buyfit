@@ -161,7 +161,12 @@ export const MorphologieSchema = z.object({
 export type Morphologie = z.infer<typeof MorphologieSchema>;
 export const MorphologieStepSchema = z.object({ morphologie: MorphologieSchema });
 
+/** Budget max : même règle que `UserProfile.budgetMax` du contrat (nombre ≥ 0), bornée pour l'UI. */
 export const MarquesStepSchema = z.object({
+  budgetMax: z
+    .number({ error: "Indique ton budget maximum" })
+    .min(5, "Budget minimum : 5 €")
+    .max(5000, "Budget maximum : 5 000 €"),
   marquesPreferees: z.array(z.string().min(1)).min(1, "Choisis au moins une marque"),
 });
 
@@ -247,8 +252,8 @@ export const CompteMarchandWebSchema = CompteMarchandSchema.extend({
 export type CompteMarchandWeb = z.infer<typeof CompteMarchandWebSchema>;
 
 /**
- * Profil complet côté web. Reprend `UserProfile` (sauf `photos` et `budgetMax`, remplacés par
- * deux photos nommées et un budget non demandé) et ajoute les champs validés par l'équipe.
+ * Profil complet côté web. Reprend `UserProfile` (sauf `photos`, remplacé par deux photos
+ * nommées) et ajoute les champs validés par l'équipe.
  */
 export const WebProfileSchema = z.object({
   id: z.string().min(1),
@@ -260,6 +265,7 @@ export const WebProfileSchema = z.object({
   poidsKg: z.number().optional(),
   morphologie: MorphologieSchema.partial(),
   devise: z.string().length(3),
+  budgetMax: z.number().nonnegative().optional(),
   marquesPreferees: z.array(z.string()),
   contact: ContactSchema.partial(),
   adresse: AdresseSchema.partial(),

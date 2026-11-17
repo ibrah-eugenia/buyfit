@@ -23,7 +23,7 @@ Pour chaque point : ce qu'on propose, pourquoi, et l'impact sur les autres briqu
 
 Suggestions associées :
 
-- `budgetMax` : **le rendre optionnel**. L'équipe a décidé de ne pas le demander à l'inscription.
+- `budgetMax` : rien à changer, le site le demande à l'étape « Budget et marques ».
 - `photos[]` : garder pour compatibilité, ou le remplacer par les deux champs nommés ci-dessus.
 - `CompteMarchand` : rien à changer (le site n'enregistre jamais de mot de passe, seulement `vaultId`).
   Le site ajoute juste un `statut` d'affichage (`connecte` / `non_connecte`) déduit de `vaultId`.

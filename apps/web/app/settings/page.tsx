@@ -23,7 +23,7 @@ const SECTIONS = [
   { id: "photos", label: "Photos" },
   { id: "corps", label: "Silhouette" },
   { id: "morpho", label: "Morphologie" },
-  { id: "marques", label: "Marques" },
+  { id: "marques", label: "Budget et marques" },
   { id: "contact", label: "Contact et livraison" },
   { id: "comptes", label: "Comptes marchands" },
 ] as const;
