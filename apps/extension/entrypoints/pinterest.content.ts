@@ -27,5 +27,25 @@ function resolvePinImage(srcUrl: string): ResolveImageResponse {
   const link = img?.closest<HTMLAnchorElement>('a[href*="/pin/"]');
   const pinUrl = link ? new URL(link.getAttribute("href")!, location.origin).href : location.href;
 
-  return { imageUrl, pinUrl };
+  const description = pinDescription(img, Boolean(link));
+  return description ? { imageUrl, pinUrl, description } : { imageUrl, pinUrl };
+}
+
+/**
+ * Texte de l'épingle, utilisé comme requête de recherche produits :
+ * texte alternatif de l'image (Pinterest y met le titre/la description), sinon, en vue
+ * détail, le titre de l'épingle ou la meta og:description.
+ */
+function pinDescription(img: HTMLImageElement | undefined, inGrid: boolean): string | undefined {
+  const candidates = [
+    img?.alt,
+    !inGrid ? document.querySelector("h1")?.textContent : null,
+    !inGrid
+      ? document.querySelector<HTMLMetaElement>('meta[property="og:description"]')?.content
+      : null,
+  ];
+  const text = candidates
+    .map((t) => t?.replace(/\s+/g, " ").trim())
+    .find((t) => t && t.length >= 4 && !/^(image|photo|pin)$/i.test(t));
+  return text?.slice(0, 500);
 }

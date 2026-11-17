@@ -17,7 +17,9 @@ Renvoie `{ "ok": true, "mocks": { "brightdata": bool, "hcompany": bool, "tryon":
 ## `POST /capture`
 
 Lance la recherche d'équivalents d'une tenue chez les marques préférées de l'utilisateur et dans
-son budget (Bright Data).
+son budget (Bright Data → Google Shopping). `capture.description` (texte de l'épingle, lu par
+l'extension) sert de requête : **sans elle, l'API répond `422`** tant que la recherche par image
+(Google Lens) est désactivée. Les `tailleDisponibles` sont souvent vides : l'utilisateur saisit sa taille.
 
 |               | Schéma                                                                     |
 | ------------- | -------------------------------------------------------------------------- |
@@ -30,6 +32,7 @@ son budget (Bright Data).
   "capture": {
     "imageUrl": "https://i.pinimg.com/originals/ab/cd/ef.jpg",
     "pinUrl": "https://www.pinterest.com/pin/123456/",
+    "description": "Pull col roulé torsadé en laine",
     "capturedAt": "2026-11-17T10:00:00.000Z"
   }
 }

@@ -17,6 +17,8 @@ const EnvSchema = z.object({
 
   BRIGHTDATA_API_TOKEN: z.string().optional(),
   BRIGHTDATA_SERP_ZONE: z.string().default("serp_api1"),
+  /** Google Lens via Bright Data (recherche par image). Désactivé : renvoie no_local_parser (17/11/2026). */
+  BRIGHTDATA_USE_LENS: bool,
 
   SUPABASE_URL: z.string().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
