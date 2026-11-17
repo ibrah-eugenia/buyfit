@@ -46,9 +46,12 @@ Scope optionnel : `feat(api): …`, `fix(extension): …`, `feat(web): …`, `fe
 4. Merge en _squash_ ; supprimer les branches de feature après merge (pas les branches perso).
 5. Petites PR, souvent : plus facile à relire, moins de conflits.
 
-> Protection GitHub : si `main` et `dev` ne peuvent pas être protégées automatiquement (repo privé
-> sur un plan GitHub Free), ces règles s'appliquent **par convention** : personne ne pousse sur
-> `main`/`dev`, personne ne merge sa propre PR sans review.
+> **Protection GitHub indisponible** : le repo est privé sur un plan GitHub Free, donc ni la
+> protection de branches ni les rulesets ne sont activables côté serveur. Les règles s'appliquent
+> **par convention** : personne ne pousse sur `main`/`dev`, personne ne merge sa propre PR sans review.
+>
+> Garde-fou local : `pnpm install` active le hook [`.githooks/pre-push`](.githooks/pre-push), qui
+> refuse tout `git push` vers `main` ou `dev`. Ne pas le contourner (`--no-verify`).
 
 ## Contrat partagé
 

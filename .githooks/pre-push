@@ -1,0 +1,17 @@
+#!/bin/sh
+# Bloque tout push direct sur main ou dev (le plan GitHub Free ne permet pas de les protéger
+# côté serveur sur un repo privé). Tout passe par une PR vers dev — voir CONTRIBUTING.md.
+# Activé automatiquement par `pnpm install` (script "prepare" → core.hooksPath=.githooks).
+
+protected="refs/heads/main refs/heads/dev"
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  for p in $protected; do
+    if [ "$remote_ref" = "$p" ]; then
+      echo "✋ Push direct sur ${p#refs/heads/} interdit. Pousse ta branche et ouvre une PR vers dev." >&2
+      exit 1
+    fi
+  done
+done
+
+exit 0
