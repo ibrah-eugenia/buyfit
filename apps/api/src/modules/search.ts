@@ -11,7 +11,7 @@
 import { createHash } from "node:crypto";
 import type { ProductMatch, SearchRequest, SearchResponse } from "@buyfit/shared";
 import { config } from "../config.js";
-import { cleanQuery, searchImages, type ImageHit } from "./brightdata.js";
+import { brandKey, cleanQuery, searchImages, searchShopping, titleOverlap, type ImageHit } from "./brightdata.js";
 import { filterBySimilarity } from "./similarity.js";
 
 type Store = {
@@ -31,7 +31,11 @@ export const STORES: Store[] = [
 /** Candidats par magasin envoyés au filtre IA : plus = meilleur rappel, mais plus lent. */
 const PER_STORE = 4;
 /** Au-delà, un magasin trop lent est ignoré : on affiche les autres plutôt que d'attendre. */
-const STORE_DEADLINE_MS = 15_000;
+const STORE_DEADLINE_MS = 14_000;
+/** Recherche de prix par produit : au-delà, le produit reste sans prix (« Voir le prix »). */
+const PRICE_DEADLINE_MS = 6_000;
+/** Recouvrement minimal entre le nom du produit et le titre Google Shopping. */
+const PRICE_MIN_OVERLAP = 0.5;
 
 export async function searchStores(req: SearchRequest): Promise<SearchResponse> {
   const base = withGender(cleanQuery(req.requete), req.genre);
@@ -40,10 +44,56 @@ export async function searchStores(req: SearchRequest): Promise<SearchResponse> 
   );
   const hits = perStore.flatMap((items) => items.slice(0, PER_STORE));
   const products = hits.map((h) => h.product);
-  if (!products.length || !req.imageDataUrl) return { resultats: products, filtreIA: false };
+  if (!products.length) return { resultats: [], filtreIA: false };
+  // Prix (Google Shopping) et filtre IA en parallèle : la latence reste celle du plus lent.
   // Le filtre IA compare les miniatures Google (légères) ; l'extension affiche la photo HD.
   const thumbs = new Map(hits.map((h) => [h.product.id, h.thumb]));
-  return filterBySimilarity(req.imageDataUrl, products, (p) => thumbs.get(p.id) ?? p.imageUrl);
+  const [filtered, prices] = await Promise.all([
+    req.imageDataUrl
+      ? filterBySimilarity(req.imageDataUrl, products, (p) => thumbs.get(p.id) ?? p.imageUrl)
+      : Promise.resolve({ resultats: products, filtreIA: false }),
+    findPrices(products),
+  ]);
+  return {
+    ...filtered,
+    resultats: filtered.resultats.map((p) => {
+      const price = prices.get(p.id);
+      return price ? { ...p, prix: price.prix, devise: price.devise } : p;
+    }),
+  };
+}
+
+/**
+ * Google Images ne donne pas le prix : on cherche chaque produit sur Google Shopping
+ * (nom + magasin) et on garde le prix d'une offre du même magasin au titre proche.
+ */
+async function findPrices(products: ProductMatch[]): Promise<Map<string, Pick<ProductMatch, "prix" | "devise">>> {
+  if (config.mocks.brightdata) return new Map();
+  const found = await Promise.all(
+    products.map(async (p) => {
+      const key = brandKey(p.marque);
+      const name = p.nom.split(" - ")[0]!;
+      const pick = (offers: ProductMatch[]) =>
+        offers
+          .filter((o) => o.prix > 0 && (brandKey(o.marque) === key || o.marque.toLowerCase().includes(key)))
+          .map((o) => ({ o, overlap: titleOverlap(name, o.nom) }))
+          .filter((x) => x.overlap >= PRICE_MIN_OVERLAP)
+          .sort((a, b) => b.overlap - a.overlap)[0]?.o;
+      // Nom complet, puis 5 premiers mots : Bright Data rejette parfois une formulation
+      // (et bloque alors cette URL exacte 60 s), une autre passe souvent.
+      const queries = [...new Set([name, name.split(" ").slice(0, 5).join(" ")])].map((n) => `${n} ${p.marque}`);
+      const lookup = (async () => {
+        for (const q of queries) {
+          const best = pick(await searchShopping(q).catch(() => []));
+          if (best) return [p.id, { prix: best.prix, devise: best.devise }] as const;
+        }
+        return null;
+      })();
+      const late = new Promise<null>((r) => setTimeout(() => r(null), PRICE_DEADLINE_MS));
+      return Promise.race([lookup.catch(() => null), late]);
+    }),
+  );
+  return new Map(found.filter((x) => x !== null));
 }
 
 /** Ajoute « homme » / « femme » à la requête s'il n'y figure pas déjà. */

@@ -153,7 +153,7 @@ function boostPreferredBrands(p: ProductMatch, profile: UserProfile): number {
 }
 
 /** Part des mots significatifs du titre produit retrouvés dans le titre de la page. */
-function titleOverlap(product: string, page: string): number {
+export function titleOverlap(product: string, page: string): number {
   const words = (s: string) =>
     new Set(
       s

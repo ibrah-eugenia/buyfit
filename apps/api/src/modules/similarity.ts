@@ -9,7 +9,7 @@ import { config } from "../config.js";
 
 const HF_CHAT_URL = "https://router.huggingface.co/v1/chat/completions";
 /** Note minimale (sur 10) pour qu'un produit soit considéré comme la même pièce. */
-const MIN_SCORE = 5;
+const MIN_SCORE = 6;
 const IMAGE_TIMEOUT_MS = 4_000;
 const MODEL_TIMEOUT_MS = 20_000;
 
