@@ -10,11 +10,32 @@ type Table = Record<SizeLetter, string[]>;
 
 const TABLES: Record<string, Table> = {
   // Vestes, blazers, costumes, manteaux homme (tour de poitrine / 2)
-  "homme-tailleur": { XS: ["44"], S: ["46"], M: ["48", "50"], L: ["52", "54"], XL: ["56", "58"], XXL: ["60", "62"] },
+  "homme-tailleur": {
+    XS: ["44"],
+    S: ["46"],
+    M: ["48", "50"],
+    L: ["52", "54"],
+    XL: ["56", "58"],
+    XXL: ["60", "62"],
+  },
   // Chemises homme (tour de cou en cm)
-  "homme-chemise": { XS: ["37"], S: ["38"], M: ["39", "40"], L: ["41", "42"], XL: ["43", "44"], XXL: ["45", "46"] },
+  "homme-chemise": {
+    XS: ["37"],
+    S: ["38"],
+    M: ["39", "40"],
+    L: ["41", "42"],
+    XL: ["43", "44"],
+    XXL: ["45", "46"],
+  },
   // Pantalons homme (taille FR)
-  "homme-bas": { XS: ["36"], S: ["38"], M: ["40", "42"], L: ["44", "46"], XL: ["48"], XXL: ["50", "52"] },
+  "homme-bas": {
+    XS: ["36"],
+    S: ["38"],
+    M: ["40", "42"],
+    L: ["44", "46"],
+    XL: ["48"],
+    XXL: ["50", "52"],
+  },
   // Hauts, robes, vestes, pantalons femme (taille FR)
   femme: { XS: ["34"], S: ["36"], M: ["38"], L: ["40"], XL: ["42"], XXL: ["44"] },
 };
@@ -37,13 +58,19 @@ function tableFor(genre?: string, categorie?: string): Table | null {
 }
 
 /** Tailles numériques équivalentes à `taille` (ex. L, veste homme → ["52", "54"]), sinon []. */
-export function sizeEquivalents(taille: string, opts: { genre?: string; categorie?: string }): string[] {
+export function sizeEquivalents(
+  taille: string,
+  opts: { genre?: string; categorie?: string },
+): string[] {
   const t = taille.trim().toUpperCase() as SizeLetter;
   return tableFor(opts.genre, opts.categorie)?.[t] ?? [];
 }
 
 /** Libellé court pour l'affichage : « 52–54 », « 40 », ou "" sans équivalence. */
-export function sizeEquivalentLabel(taille: string, opts: { genre?: string; categorie?: string }): string {
+export function sizeEquivalentLabel(
+  taille: string,
+  opts: { genre?: string; categorie?: string },
+): string {
   const v = sizeEquivalents(taille, opts);
   return v.length > 1 ? `${v[0]}–${v[v.length - 1]}` : (v[0] ?? "");
 }

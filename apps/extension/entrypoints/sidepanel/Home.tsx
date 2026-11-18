@@ -170,7 +170,9 @@ function PinFlow({
     let cancelled = false;
     void getPinPreview(pinUrl).then((data) => {
       if (cancelled) return;
-      setPreview(data?.imageUrl ? { kind: "ready", url: pinUrl, data } : { kind: "failed", url: pinUrl });
+      setPreview(
+        data?.imageUrl ? { kind: "ready", url: pinUrl, data } : { kind: "failed", url: pinUrl },
+      );
     });
     return () => {
       cancelled = true;
@@ -261,7 +263,9 @@ function PinFlow({
         userId={userId}
         size={size}
         onRestart={restart}
-        onRetry={piece.kind === "ready" ? () => void runSearch(piece.item, piece.cropUrl) : undefined}
+        onRetry={
+          piece.kind === "ready" ? () => void runSearch(piece.item, piece.cropUrl) : undefined
+        }
       />
     );
   }

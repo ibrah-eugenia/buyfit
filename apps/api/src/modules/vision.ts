@@ -78,7 +78,10 @@ export function parseItem(text: string): IdentifiedItem {
   const clean: Record<string, unknown> = Object.fromEntries(
     Object.entries(obj)
       .filter(([, v]) => typeof v === "string" && v.trim())
-      .map(([k, v]) => [k, (v as string).trim().slice(0, k === "nom" || k === "requete" ? 160 : 60)]),
+      .map(([k, v]) => [
+        k,
+        (v as string).trim().slice(0, k === "nom" || k === "requete" ? 160 : 60),
+      ]),
   );
   if (typeof clean.genre === "string") {
     const g = clean.genre.toLowerCase();
@@ -95,7 +98,11 @@ export function parseItem(text: string): IdentifiedItem {
     .slice(0, 3);
   const parsed = IdentifiedItemSchema.safeParse(clean);
   if (!parsed.success) {
-    throw new HttpError(422, "Pièce non reconnue : essaie une sélection plus serrée", text.slice(0, 200));
+    throw new HttpError(
+      422,
+      "Pièce non reconnue : essaie une sélection plus serrée",
+      text.slice(0, 200),
+    );
   }
   return parsed.data;
 }

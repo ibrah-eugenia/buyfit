@@ -31,7 +31,11 @@ export function readPinPage(): PagePreview {
   const ogImage = ogFresh ? meta("og:image") : undefined;
   const raw = ogImage && ogImage.includes("i.pinimg.com") ? ogImage : img?.currentSrc || img?.src;
 
-  const title = [ogFresh ? meta("og:title") : null, document.querySelector("h1")?.textContent, img?.alt]
+  const title = [
+    ogFresh ? meta("og:title") : null,
+    document.querySelector("h1")?.textContent,
+    img?.alt,
+  ]
     .map((t) => t?.replace(/\s+/g, " ").trim())
     .find((t) => t && t.length >= 3);
 

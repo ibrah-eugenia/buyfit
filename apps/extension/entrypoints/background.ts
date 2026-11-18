@@ -40,7 +40,8 @@ export default defineBackground(() => {
     void browser.tabs
       .update(tabId, { active: true })
       .then((tab) => {
-        if (tab?.windowId !== undefined) void browser.windows.update(tab.windowId, { focused: true });
+        if (tab?.windowId !== undefined)
+          void browser.windows.update(tab.windowId, { focused: true });
         return browser.tabs.sendMessage(tabId, { type: "buyfit:open-launcher" });
       })
       .catch(() => {});

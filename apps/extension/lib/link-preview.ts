@@ -15,10 +15,7 @@ import { upgradePinimgUrl } from "./pinimg";
 export async function getPinPreview(pinUrl: string): Promise<PagePreview | null> {
   const url = await expandShortLink(pinUrl);
   return (
-    (await fromActiveTab(url)) ??
-    (await fromOEmbed(url)) ??
-    (await fromOpenGraph(url)) ??
-    null
+    (await fromActiveTab(url)) ?? (await fromOEmbed(url)) ?? (await fromOpenGraph(url)) ?? null
   );
 }
 

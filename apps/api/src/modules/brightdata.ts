@@ -110,7 +110,10 @@ function rank(items: ProductMatch[], profile: UserProfile, query = ""): ProductM
             ...p,
             score: Math.min(
               1,
-              Math.round((p.score * (1 - RELEVANCE_WEIGHT) + titleOverlap(query, p.nom) * RELEVANCE_WEIGHT) * 100) / 100,
+              Math.round(
+                (p.score * (1 - RELEVANCE_WEIGHT) + titleOverlap(query, p.nom) * RELEVANCE_WEIGHT) *
+                  100,
+              ) / 100,
             ),
           }
         : p,
@@ -231,7 +234,9 @@ export async function searchShopping(query: string): Promise<ProductMatch[]> {
       break;
     } catch (err) {
       lastError = err;
-      console.warn(`[brightdata] « ${query} » ${extra} : ${err instanceof Error ? err.message.slice(0, 80) : err}`);
+      console.warn(
+        `[brightdata] « ${query} » ${extra} : ${err instanceof Error ? err.message.slice(0, 80) : err}`,
+      );
     }
   }
   if (!json) throw lastError;
@@ -275,7 +280,9 @@ export async function searchImages(query: string): Promise<ImageHit[]> {
   // Si le 1er format n'a pas répondu après HEDGE_MS, on lance le 2nd ; la 1re réponse gagne.
   let settled = false;
   const run = (extra: string) =>
-    serp(google(query, extra), 25_000, 0).then((json) => parseImages(json as { images?: RawImage[] }));
+    serp(google(query, extra), 25_000, 0).then((json) =>
+      parseImages(json as { images?: RawImage[] }),
+    );
   const first = run("&udm=2");
   const second = new Promise((r) => setTimeout(r, HEDGE_MS)).then(() => {
     if (settled) throw new Error("inutile");
@@ -285,7 +292,9 @@ export async function searchImages(query: string): Promise<ImageHit[]> {
     return await Promise.any([first, second]);
   } catch (err) {
     const cause = err instanceof AggregateError ? err.errors[0] : err;
-    console.warn(`[brightdata] images « ${query} » : ${cause instanceof Error ? cause.message.slice(0, 80) : cause}`);
+    console.warn(
+      `[brightdata] images « ${query} » : ${cause instanceof Error ? cause.message.slice(0, 80) : cause}`,
+    );
     throw cause;
   } finally {
     settled = true;
@@ -422,7 +431,14 @@ async function searchLens(imageUrl: string): Promise<ProductMatch[]> {
 // ---------- utilitaires ----------
 
 /** Google renvoie parfois des entités HTML dans les titres (« H&amp;M »). */
-const ENTITIES: Record<string, string> = { amp: "&", quot: '"', apos: "'", lt: "<", gt: ">", nbsp: " " };
+const ENTITIES: Record<string, string> = {
+  amp: "&",
+  quot: '"',
+  apos: "'",
+  lt: "<",
+  gt: ">",
+  nbsp: " ",
+};
 const decodeEntities = (s: string | undefined) =>
   s
     ?.replace(/&(amp|quot|apos|lt|gt|nbsp);/g, (_, e: string) => ENTITIES[e]!)

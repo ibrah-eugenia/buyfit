@@ -11,7 +11,14 @@
 import { createHash } from "node:crypto";
 import type { ProductMatch, SearchRequest, SearchResponse } from "@buyfit/shared";
 import { config } from "../config.js";
-import { brandKey, cleanQuery, searchImages, searchShopping, titleOverlap, type ImageHit } from "./brightdata.js";
+import {
+  brandKey,
+  cleanQuery,
+  searchImages,
+  searchShopping,
+  titleOverlap,
+  type ImageHit,
+} from "./brightdata.js";
 import { filterBySimilarity } from "./similarity.js";
 
 type Store = {
@@ -26,7 +33,12 @@ type Store = {
 export const STORES: Store[] = [
   { name: "Zara", site: "zara.com", product: /-p\d{6,}\.html/, id: /-p(\d{6,})\.html/ },
   { name: "Mango", site: "shop.mango.com", product: /\/p\/.+\/\d{8}/, id: /\/(\d{8})(?:[/?]|$)/ },
-  { name: "Uniqlo", site: "uniqlo.com", product: /\/products\/E?\d{6}/, id: /\/products\/(E?\d{6})/ },
+  {
+    name: "Uniqlo",
+    site: "uniqlo.com",
+    product: /\/products\/E?\d{6}/,
+    id: /\/products\/(E?\d{6})/,
+  },
 ];
 /** Candidats par magasin envoyés au filtre IA : plus = meilleur rappel, mais plus lent. */
 const PER_STORE = 4;
@@ -67,7 +79,9 @@ export async function searchStores(req: SearchRequest): Promise<SearchResponse> 
  * Google Images ne donne pas le prix : on cherche chaque produit sur Google Shopping
  * (nom + magasin) et on garde le prix d'une offre du même magasin au titre proche.
  */
-async function findPrices(products: ProductMatch[]): Promise<Map<string, Pick<ProductMatch, "prix" | "devise">>> {
+async function findPrices(
+  products: ProductMatch[],
+): Promise<Map<string, Pick<ProductMatch, "prix" | "devise">>> {
   if (config.mocks.brightdata) return new Map();
   const found = await Promise.all(
     products.map(async (p) => {
@@ -75,13 +89,18 @@ async function findPrices(products: ProductMatch[]): Promise<Map<string, Pick<Pr
       const name = p.nom.split(" - ")[0]!;
       const pick = (offers: ProductMatch[]) =>
         offers
-          .filter((o) => o.prix > 0 && (brandKey(o.marque) === key || o.marque.toLowerCase().includes(key)))
+          .filter(
+            (o) =>
+              o.prix > 0 && (brandKey(o.marque) === key || o.marque.toLowerCase().includes(key)),
+          )
           .map((o) => ({ o, overlap: titleOverlap(name, o.nom) }))
           .filter((x) => x.overlap >= PRICE_MIN_OVERLAP)
           .sort((a, b) => b.overlap - a.overlap)[0]?.o;
       // Nom complet, puis 5 premiers mots : Bright Data rejette parfois une formulation
       // (et bloque alors cette URL exacte 60 s), une autre passe souvent.
-      const queries = [...new Set([name, name.split(" ").slice(0, 5).join(" ")])].map((n) => `${n} ${p.marque}`);
+      const queries = [...new Set([name, name.split(" ").slice(0, 5).join(" ")])].map(
+        (n) => `${n} ${p.marque}`,
+      );
       const lookup = (async () => {
         for (const q of queries) {
           const best = pick(await searchShopping(q).catch(() => []));
@@ -115,7 +134,11 @@ function withDeadline(p: Promise<Hit[]>, ms: number, name: string): Promise<Hit[
   return Promise.race([p, late]).finally(() => clearTimeout(timer));
 }
 
-async function searchStore(store: Store, base: string, genre?: SearchRequest["genre"]): Promise<Hit[]> {
+async function searchStore(
+  store: Store,
+  base: string,
+  genre?: SearchRequest["genre"],
+): Promise<Hit[]> {
   if (config.mocks.brightdata) return mockStore(store.name);
   // Version française du site d'abord ; sinon le site entier (les liens sont ramenés en FR).
   for (const site of [`${store.site}/fr`, store.site]) {
@@ -123,16 +146,26 @@ async function searchStore(store: Store, base: string, genre?: SearchRequest["ge
       const hits = pickProducts(await searchImages(`${base} site:${site}`), store, genre);
       if (hits.length) return hits;
     } catch (err) {
-      console.warn(`[search] ${store.name} :`, err instanceof Error ? err.message.slice(0, 120) : err);
+      console.warn(
+        `[search] ${store.name} :`,
+        err instanceof Error ? err.message.slice(0, 120) : err,
+      );
     }
   }
   return [];
 }
 
-const OTHER_GENDER = { homme: /\b(femme|women|woman|fille|girl)s?\b/i, femme: /\b(homme|men|man|garçon|boy)s?\b/i };
+const OTHER_GENDER = {
+  homme: /\b(femme|women|woman|fille|girl)s?\b/i,
+  femme: /\b(homme|men|man|garçon|boy)s?\b/i,
+};
 
 /** Fiches produit du magasin, une par article, version FR, sans le rayon de l'autre genre. */
-export function pickProducts(hits: ImageHit[], store: Store, genre?: SearchRequest["genre"]): Hit[] {
+export function pickProducts(
+  hits: ImageHit[],
+  store: Store,
+  genre?: SearchRequest["genre"],
+): Hit[] {
   const seen = new Set<string>();
   const out: Hit[] = [];
   hits.forEach((h, rank) => {
@@ -172,17 +205,34 @@ export function cleanTitle(title: string): string {
     .trim();
   // Zara écrit le nom en capitales (« VESTE CROISÉE - Beige clair ») : on le remet en minuscules.
   const [head = "", ...rest] = t.split(" - ");
-  if (head === head.toUpperCase()) t = [head.charAt(0) + head.slice(1).toLowerCase(), ...rest].join(" - ");
+  if (head === head.toUpperCase())
+    t = [head.charAt(0) + head.slice(1).toLowerCase(), ...rest].join(" - ");
   return t.slice(0, 160) || title.slice(0, 160);
 }
 
 const MOCK: Record<string, [string, string][]> = {
   Zara: [
-    ["Blazer croisé à carreaux", "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=600"],
-    ["Blazer oversize laine mélangée", "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=600"],
+    [
+      "Blazer croisé à carreaux",
+      "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=600",
+    ],
+    [
+      "Blazer oversize laine mélangée",
+      "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=600",
+    ],
   ],
-  Mango: [["Veste de costume structurée", "https://images.unsplash.com/photo-1551028719-00167b16eac5?w=600"]],
-  Uniqlo: [["Veste confort en laine", "https://images.unsplash.com/photo-1539533018447-63fcce2678e3?w=600"]],
+  Mango: [
+    [
+      "Veste de costume structurée",
+      "https://images.unsplash.com/photo-1551028719-00167b16eac5?w=600",
+    ],
+  ],
+  Uniqlo: [
+    [
+      "Veste confort en laine",
+      "https://images.unsplash.com/photo-1539533018447-63fcce2678e3?w=600",
+    ],
+  ],
 };
 
 async function mockStore(store: string): Promise<Hit[]> {

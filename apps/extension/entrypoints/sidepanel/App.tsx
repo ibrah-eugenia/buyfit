@@ -35,18 +35,18 @@ export function App() {
   // budgetMax absent (clic droit) → l'API prend le budget du profil.
   const search = useCallback(
     async (capture: InspirationCapture, budgetMax?: number, requetesSecours?: string[]) => {
-    setPhase({ kind: "searching", capture });
-    try {
-      const matches = await api.capture({
-        userId: USER_ID,
-        capture,
-        ...(budgetMax ? { budgetMax } : {}),
-        ...(requetesSecours?.length ? { requetesSecours } : {}),
-      });
-      setPhase({ kind: "results", capture, matches });
-    } catch (e) {
-      setPhase({ kind: "error", message: errMsg(e) });
-    }
+      setPhase({ kind: "searching", capture });
+      try {
+        const matches = await api.capture({
+          userId: USER_ID,
+          capture,
+          ...(budgetMax ? { budgetMax } : {}),
+          ...(requetesSecours?.length ? { requetesSecours } : {}),
+        });
+        setPhase({ kind: "results", capture, matches });
+      } catch (e) {
+        setPhase({ kind: "error", message: errMsg(e) });
+      }
     },
     [],
   );
@@ -90,8 +90,16 @@ export function App() {
               aria-label="Fermer BuyFit"
               onClick={() => window.parent.postMessage({ type: "buyfit:close" }, "*")}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                aria-hidden="true"
+              >
                 <path d="M6 6l12 12M18 6L6 18" />
               </svg>
             </button>
@@ -103,28 +111,30 @@ export function App() {
 
       {phase.kind !== "idle" && (
         <main className="content">
-      {phase.kind === "searching" && (
-        <>
-          <img className="inspiration" src={phase.capture.imageUrl} alt="Inspiration" />
-          <p className="loading">Recherche d'équivalents dans ton budget…</p>
-        </>
-      )}
-
-      {phase.kind === "error" && <p className="error">Erreur : {phase.message}</p>}
-
-      {phase.kind === "results" && (
-        <>
-          <img className="inspiration" src={phase.capture.imageUrl} alt="Inspiration" />
-          {phase.matches.length === 0 && <p className="hint">Aucun équivalent dans ton budget.</p>}
-          {phase.matches.length > 0 && (
-            <div className="results-row">
-              {phase.matches.map((p) => (
-                <ProductCard key={p.id} product={p} />
-              ))}
-            </div>
+          {phase.kind === "searching" && (
+            <>
+              <img className="inspiration" src={phase.capture.imageUrl} alt="Inspiration" />
+              <p className="loading">Recherche d'équivalents dans ton budget…</p>
+            </>
           )}
-        </>
-      )}
+
+          {phase.kind === "error" && <p className="error">Erreur : {phase.message}</p>}
+
+          {phase.kind === "results" && (
+            <>
+              <img className="inspiration" src={phase.capture.imageUrl} alt="Inspiration" />
+              {phase.matches.length === 0 && (
+                <p className="hint">Aucun équivalent dans ton budget.</p>
+              )}
+              {phase.matches.length > 0 && (
+                <div className="results-row">
+                  {phase.matches.map((p) => (
+                    <ProductCard key={p.id} product={p} />
+                  ))}
+                </div>
+              )}
+            </>
+          )}
         </main>
       )}
     </div>

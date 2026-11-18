@@ -20,7 +20,13 @@ export default defineConfig({
     description: "Trouve ce look Pinterest dans ton budget, essaie-le et commande-le.",
     permissions: ["contextMenus", "notifications", "scripting", "sidePanel", "storage"],
     // Hôtes Pinterest : donnent aussi accès à l'URL de l'onglet ouvert (pré-remplissage du lien).
-    host_permissions: ["*://*.pinterest.com/*", "*://*.pinterest.fr/*", "*://pin.it/*", "*://i.pinimg.com/*", `${new URL(apiUrl).origin}/*`],
+    host_permissions: [
+      "*://*.pinterest.com/*",
+      "*://*.pinterest.fr/*",
+      "*://pin.it/*",
+      "*://i.pinimg.com/*",
+      `${new URL(apiUrl).origin}/*`,
+    ],
     action: { default_title: "Ouvrir BuyFit" },
     // Le lanceur flottant affiche sidepanel.html dans une iframe sur Pinterest.
     web_accessible_resources: [

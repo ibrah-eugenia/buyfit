@@ -65,24 +65,46 @@ function status(orderId: string): OrderStatus {
   }
   if (o.confirmedAt) {
     return Date.now() - o.confirmedAt > 2500
-      ? { ...base, statut: "confirmation_requise", etape: "banque", message: "Valide le paiement dans ton application bancaire." }
+      ? {
+          ...base,
+          statut: "confirmation_requise",
+          etape: "banque",
+          message: "Valide le paiement dans ton application bancaire.",
+        }
       : { ...base, statut: "en_cours", message: "Validation du paiement…" };
   }
   if (o.deliveryAt) {
     return Date.now() - o.deliveryAt > 3000
-      ? { ...base, statut: "confirmation_requise", etape: "paiement", message: "Veste croisée beige, taille L", total: "75,90 €" }
+      ? {
+          ...base,
+          statut: "confirmation_requise",
+          etape: "paiement",
+          message: "Veste croisée beige, taille L",
+          total: "75,90 €",
+        }
       : { ...base, statut: "en_cours", message: "L'agent finalise la commande…" };
   }
   const t = Date.now() - o.startedAt;
   if (t < 2000) return { ...base, statut: "en_attente" };
   // Simulations : XS = vérification anti-robot, XXL = rupture de stock.
   if (o.taille === "XS" && t > 3500) {
-    return { ...base, statut: "echec", motif: "site_bloque", message: "Vérification anti-robot affichée par le site." };
+    return {
+      ...base,
+      statut: "echec",
+      motif: "site_bloque",
+      message: "Vérification anti-robot affichée par le site.",
+    };
   }
   if (o.taille === "XXL" && t > 3500) {
-    return { ...base, statut: "echec", motif: "rupture", message: "Taille XXL indisponible : « Rupture de stock » affichée sur la page produit." };
+    return {
+      ...base,
+      statut: "echec",
+      motif: "rupture",
+      message: "Taille XXL indisponible : « Rupture de stock » affichée sur la page produit.",
+    };
   }
-  if (t < 6000) return { ...base, statut: "en_cours", message: "L'agent ajoute l'article au panier…" };
+  if (t < 6000)
+    return { ...base, statut: "en_cours", message: "L'agent ajoute l'article au panier…" };
   return { ...base, statut: "confirmation_requise", etape: "livraison", livraisons: LIVRAISONS };
 }
 

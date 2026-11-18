@@ -47,7 +47,11 @@ export function Results({
           <img className="thumb" src={piece.cropUrl} alt="Pièce sélectionnée" />
           <div>
             <div className="piece-name">
-              {piece.kind === "ready" ? piece.item.nom : piece.kind === "loading" ? "Analyse de la pièce…" : "Pièce non reconnue"}
+              {piece.kind === "ready"
+                ? piece.item.nom
+                : piece.kind === "loading"
+                  ? "Analyse de la pièce…"
+                  : "Pièce non reconnue"}
             </div>
             {size && piece.kind === "ready" && (
               <div className="piece-size">
@@ -61,7 +65,11 @@ export function Results({
         {piece.kind === "error" ? (
           <Status text={piece.message} error />
         ) : search.kind === "error" ? (
-          <Status text={search.message} error action={onRetry && { label: "Réessayer", onClick: onRetry }} />
+          <Status
+            text={search.message}
+            error
+            action={onRetry && { label: "Réessayer", onClick: onRetry }}
+          />
         ) : search.kind === "ready" ? (
           search.resultats.length ? (
             <Carousel
@@ -76,7 +84,11 @@ export function Results({
         ) : (
           <div className="status">
             <Spinner large />
-            <p>{piece.kind === "loading" ? "On reconnaît la pièce…" : "Recherche chez Zara, Mango et Uniqlo…"}</p>
+            <p>
+              {piece.kind === "loading"
+                ? "On reconnaît la pièce…"
+                : "Recherche chez Zara, Mango et Uniqlo…"}
+            </p>
           </div>
         )}
       </div>
@@ -135,10 +147,19 @@ function Carousel({
   });
 
   return (
-    <section className="carousel" aria-roledescription="carrousel" aria-label="Articles ressemblants">
+    <section
+      className="carousel"
+      aria-roledescription="carrousel"
+      aria-label="Articles ressemblants"
+    >
       <div className="slide-wrap">
         {items.length > 1 && (
-          <button type="button" className="arrow prev" aria-label="Article précédent" onClick={() => go(-1)}>
+          <button
+            type="button"
+            className="arrow prev"
+            aria-label="Article précédent"
+            onClick={() => go(-1)}
+          >
             <Chevron dir="left" />
           </button>
         )}
@@ -171,7 +192,12 @@ function Carousel({
           </div>
         </article>
         {items.length > 1 && (
-          <button type="button" className="arrow next" aria-label="Article suivant" onClick={() => go(1)}>
+          <button
+            type="button"
+            className="arrow next"
+            aria-label="Article suivant"
+            onClick={() => go(1)}
+          >
             <Chevron dir="right" />
           </button>
         )}

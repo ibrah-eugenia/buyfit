@@ -62,7 +62,9 @@ export const OrderAnswerSchema = z.object({
   motif: z
     .enum(["out_of_stock", "login_failed", "bot_blocked", "other"])
     .nullable()
-    .describe("If blocked: out_of_stock = item or size unavailable; login_failed = cannot log in; bot_blocked = CAPTCHA, anti-bot check or access denied; other = anything else. Else null"),
+    .describe(
+      "If blocked: out_of_stock = item or size unavailable; login_failed = cannot log in; bot_blocked = CAPTCHA, anti-bot check or access denied; other = anything else. Else null",
+    ),
 });
 export type OrderAnswer = z.infer<typeof OrderAnswerSchema>;
 
@@ -166,7 +168,11 @@ const MOCK_LIVRAISONS: LivraisonOption[] = [
 export async function startOrderSession(input: StartOrderInput): Promise<SessionInfo> {
   if (config.mocks.hcompany) {
     const sessionId = `mock-session-${crypto.randomUUID()}`;
-    mockSessions.set(sessionId, { startedAt: Date.now(), taille: input.taille, site: input.productUrl });
+    mockSessions.set(sessionId, {
+      startedAt: Date.now(),
+      taille: input.taille,
+      site: input.productUrl,
+    });
     return { sessionId, agentViewUrl: null };
   }
   const overrides: Record<string, unknown> = {};
@@ -187,14 +193,19 @@ export async function startOrderSession(input: StartOrderInput): Promise<Session
 }
 
 /** 2e tour : l'utilisateur a choisi son mode de livraison. */
-export async function chooseDeliverySession(sessionId: string, option: LivraisonOption): Promise<void> {
+export async function chooseDeliverySession(
+  sessionId: string,
+  option: LivraisonOption,
+): Promise<void> {
   deliveryChosen.add(sessionId);
   if (config.mocks.hcompany) {
     const s = mockSessions.get(sessionId);
     if (s) s.deliveryAt = Date.now();
     return;
   }
-  await hai().session(sessionId).sendMessage({ type: "user_message", message: deliveryPrompt(option) });
+  await hai()
+    .session(sessionId)
+    .sendMessage({ type: "user_message", message: deliveryPrompt(option) });
 }
 
 /** 4e tour (si 3-D Secure) : l'utilisateur a validé le paiement dans son appli bancaire. */
@@ -256,12 +267,21 @@ function fromAnswer(
   const a = parsed.data;
   switch (a.etape) {
     case "blocked":
-      return { statut: "echec", message: a.raison ?? a.resume, motif: MOTIFS[a.motif ?? "other"] ?? "autre" };
+      return {
+        statut: "echec",
+        message: a.raison ?? a.resume,
+        motif: MOTIFS[a.motif ?? "other"] ?? "autre",
+      };
     case "delivery_choice":
       // Choix envoyé mais le 2e tour n'a pas encore produit de réponse : on attend.
       return delivery || !a.livraisons?.length
         ? { statut: "en_cours", message: "L'agent finalise la commande…" }
-        : { statut: "confirmation_requise", etape: "livraison", livraisons: a.livraisons, message: a.resume };
+        : {
+            statut: "confirmation_requise",
+            etape: "livraison",
+            livraisons: a.livraisons,
+            message: a.resume,
+          };
     case "ready_to_pay":
       // Confirmé mais le 2e tour n'a pas encore produit de réponse : on attend.
       return confirmed
@@ -299,21 +319,38 @@ function mockState(sessionId: string): SessionState {
   }
   if (s.confirmedAt) {
     return since(s.confirmedAt) > 3000
-      ? { statut: "confirmation_requise", etape: "banque", message: "Valide le paiement dans ton application bancaire." }
+      ? {
+          statut: "confirmation_requise",
+          etape: "banque",
+          message: "Valide le paiement dans ton application bancaire.",
+        }
       : { statut: "en_cours", message: "Validation du paiement…" };
   }
   if (s.deliveryAt) {
     return since(s.deliveryAt) > 4000
-      ? { statut: "confirmation_requise", etape: "paiement", message: "Veste croisée beige, taille L", total: "75,90 €" }
+      ? {
+          statut: "confirmation_requise",
+          etape: "paiement",
+          message: "Veste croisée beige, taille L",
+          total: "75,90 €",
+        }
       : { statut: "en_cours", message: "L'agent finalise la commande…" };
   }
   const elapsed = since(s.startedAt);
   if (elapsed < 2000) return { statut: "en_attente" };
   if (s.site?.includes("mango") && elapsed > 4000) {
-    return { statut: "echec", motif: "site_bloque", message: "Vérification anti-robot affichée par le site." };
+    return {
+      statut: "echec",
+      motif: "site_bloque",
+      message: "Vérification anti-robot affichée par le site.",
+    };
   }
   if (s.taille === "XXL" && elapsed > 4000) {
-    return { statut: "echec", motif: "rupture", message: "Taille XXL indisponible : « Rupture de stock » affichée sur la page produit." };
+    return {
+      statut: "echec",
+      motif: "rupture",
+      message: "Taille XXL indisponible : « Rupture de stock » affichée sur la page produit.",
+    };
   }
   if (elapsed < 8000) return { statut: "en_cours", message: "L'agent ajoute l'article au panier…" };
   return { statut: "confirmation_requise", etape: "livraison", livraisons: MOCK_LIVRAISONS };

@@ -35,7 +35,9 @@ export function PieceSelector({
     return () => ro.disconnect();
   }, []);
   const scale = natural.w && stage.w ? Math.min(stage.w / natural.w, stage.h / natural.h) : 0;
-  const imgSize = scale ? { width: natural.w * scale, height: natural.h * scale } : { maxWidth: "100%", maxHeight: "100%" };
+  const imgSize = scale
+    ? { width: natural.w * scale, height: natural.h * scale }
+    : { maxWidth: "100%", maxHeight: "100%" };
 
   const point = (e: React.PointerEvent) => {
     const b = imgRef.current!.getBoundingClientRect();
@@ -54,7 +56,12 @@ export function PieceSelector({
     if (!start.current) return;
     const p = point(e);
     const s = start.current;
-    setRect({ x: Math.min(s.x, p.x), y: Math.min(s.y, p.y), w: Math.abs(p.x - s.x), h: Math.abs(p.y - s.y) });
+    setRect({
+      x: Math.min(s.x, p.x),
+      y: Math.min(s.y, p.y),
+      w: Math.abs(p.x - s.x),
+      h: Math.abs(p.y - s.y),
+    });
   };
   const onUp = () => {
     start.current = null;
@@ -74,7 +81,9 @@ export function PieceSelector({
             alt={alt}
             draggable={false}
             style={imgSize}
-            onLoad={(e) => setNatural({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
+            onLoad={(e) =>
+              setNatural({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })
+            }
           />
           <div
             className="selector-layer"
@@ -87,7 +96,12 @@ export function PieceSelector({
             {rect && rect.w > 0 && (
               <div
                 className={`selector-rect${valid ? "" : " small"}`}
-                style={{ left: pct(rect.x), top: pct(rect.y), width: pct(rect.w), height: pct(rect.h) }}
+                style={{
+                  left: pct(rect.x),
+                  top: pct(rect.y),
+                  width: pct(rect.w),
+                  height: pct(rect.h),
+                }}
               />
             )}
           </div>

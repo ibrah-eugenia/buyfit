@@ -21,9 +21,9 @@ l'envoie en base64 ; un modèle de vision Hugging Face (`HF_VISION_MODEL`, défa
 renvoie son nom et une requête courte, que l'extension passe ensuite en `capture.description`.
 Sans `HF_TOKEN` → réponse simulée. `422` si le modèle ne reconnaît rien.
 
-|               | Schéma                                                         |
-| ------------- | -------------------------------------------------------------- |
-| Requête       | `IdentifyRequest` = `{ userId, imageDataUrl: "data:image/…" }` |
+|               | Schéma                                                                |
+| ------------- | --------------------------------------------------------------------- |
+| Requête       | `IdentifyRequest` = `{ userId, imageDataUrl: "data:image/…" }`        |
 | Réponse `200` | `IdentifiedItem` = `{ nom, requete, categorie?, couleur?, matiere? }` |
 
 ## `POST /serp`
@@ -32,9 +32,9 @@ Recherche Google Shopping **brute** via Bright Data SERP (équivalent de la cons
 mots-clés de la pièce identifiée : pas de filtre budget ni de classement. Repli automatique sur
 `requetesSecours` (puis sur les 3 premiers mots) si Google ne renvoie rien. 12 résultats max.
 
-|               | Schéma                                                         |
-| ------------- | -------------------------------------------------------------- |
-| Requête       | `SerpRequest` = `{ userId, requete, requetesSecours? }`        |
+|               | Schéma                                                                         |
+| ------------- | ------------------------------------------------------------------------------ |
+| Requête       | `SerpRequest` = `{ userId, requete, requetesSecours? }`                        |
 | Réponse `200` | `SerpResponse` = `{ requete (celle qui a marché), resultats: ProductMatch[] }` |
 
 ## `POST /capture`
@@ -96,11 +96,11 @@ Polling conseillé côté client : toutes les 3 s jusqu'à un statut terminal (`
 
 L'agent fait deux pauses en `confirmation_requise`, distinguées par `etape` :
 
-| `etape`     | L'agent s'est arrêté…                         | Champs en plus                        |
-| ----------- | --------------------------------------------- | ------------------------------------- |
-| `livraison` | sur le choix du mode de livraison (panier OK) | `livraisons: { id, label, prix?, delai? }[]` |
+| `etape`     | L'agent s'est arrêté…                         | Champs en plus                                       |
+| ----------- | --------------------------------------------- | ---------------------------------------------------- |
+| `livraison` | sur le choix du mode de livraison (panier OK) | `livraisons: { id, label, prix?, delai? }[]`         |
 | `paiement`  | sur la dernière page avant le paiement        | `total` (ex. `"75,90 €"`), `message` = récapitulatif |
-| `banque`    | sur la validation bancaire (3-D Secure)       | `message` ; l'utilisateur valide dans son appli |
+| `banque`    | sur la validation bancaire (3-D Secure)       | `message` ; l'utilisateur valide dans son appli      |
 
 En `echec`, `motif` précise la cause : `rupture` (article ou taille indisponible), `connexion`
 (compte marchand refusé), `site_bloque` (CAPTCHA / anti-robot : l'agent s'arrête sans contourner,
@@ -118,9 +118,9 @@ Réponse de l'utilisateur quand la commande est en `confirmation_requise` :
 - étape `paiement` : corps vide → feu vert explicite, l'agent clique sur le bouton final de paiement.
 - étape `banque` : corps vide → l'utilisateur a validé dans son appli bancaire, l'agent vérifie la confirmation.
 
-|               | Schéma                                                                   |
-| ------------- | ------------------------------------------------------------------------ |
-| Requête       | `OrderConfirmRequest` = `{ livraison? }`                                 |
-| Réponse `200` | `OrderStatus` (statut `en_cours`, puis pause suivante ou `commandee`)    |
-| `400`         | étape `livraison` sans mode valide                                       |
-| `409`         | la commande n'est pas en `confirmation_requise`                          |
+|               | Schéma                                                                |
+| ------------- | --------------------------------------------------------------------- |
+| Requête       | `OrderConfirmRequest` = `{ livraison? }`                              |
+| Réponse `200` | `OrderStatus` (statut `en_cours`, puis pause suivante ou `commandee`) |
+| `400`         | étape `livraison` sans mode valide                                    |
+| `409`         | la commande n'est pas en `confirmation_requise`                       |

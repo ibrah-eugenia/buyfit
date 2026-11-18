@@ -155,7 +155,8 @@ function imageUnder(sel: Box): ScreenSelection | null {
   let sx = r.width / nw;
   let sy = r.height / nh;
   if (fit === "cover") sx = sy = Math.max(sx, sy);
-  else if (fit === "contain" || fit === "scale-down") sx = sy = Math.min(sx, sy, fit === "scale-down" ? 1 : Infinity);
+  else if (fit === "contain" || fit === "scale-down")
+    sx = sy = Math.min(sx, sy, fit === "scale-down" ? 1 : Infinity);
   else if (fit === "none") sx = sy = 1;
   const ox = r.left + (r.width - nw * sx) / 2;
   const oy = r.top + (r.height - nh * sy) / 2;

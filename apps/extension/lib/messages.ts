@@ -25,5 +25,9 @@ export interface StartSelectMessage {
 
 /** Content script → panneau : zone choisie (image + rectangle normalisé) ou annulation. */
 export type SelectionMessage =
-  | { type: "buyfit:selection"; imageUrl: string; rect: { x: number; y: number; w: number; h: number } }
+  | {
+      type: "buyfit:selection";
+      imageUrl: string;
+      rect: { x: number; y: number; w: number; h: number };
+    }
   | { type: "buyfit:selection-cancel" };

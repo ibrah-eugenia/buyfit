@@ -111,7 +111,13 @@ export async function startPurchase(
   signalBusy(true);
   try {
     update(
-      await api.order({ userId, productId: product.id, productUrl: product.url, taille: size, ...opts }),
+      await api.order({
+        userId,
+        productId: product.id,
+        productUrl: product.url,
+        taille: size,
+        ...opts,
+      }),
     );
     timer = setInterval(() => {
       const id = current?.order?.orderId;
@@ -186,15 +192,27 @@ function update(order: OrderStatus) {
     livraison: ["Choisis ta livraison", `${product.nom} est dans le panier ${product.marque}.`],
     paiement: ["Confirme le paiement", `${product.marque} · ${order.total ?? product.nom}`],
     banque: ["Valide dans ton appli bancaire", "Ta banque demande de confirmer le paiement."],
-    commandee: ["Commande validée ✓", `Tu vas recevoir l'e-mail de confirmation de ${product.marque}.`],
+    commandee: [
+      "Commande validée ✓",
+      `Tu vas recevoir l'e-mail de confirmation de ${product.marque}.`,
+    ],
     echec:
       order.motif === "rupture"
-        ? ["Rupture de stock", `${product.nom} n'est plus disponible en taille ${current.size} chez ${product.marque}.`]
+        ? [
+            "Rupture de stock",
+            `${product.nom} n'est plus disponible en taille ${current.size} chez ${product.marque}.`,
+          ]
         : order.motif === "site_bloque"
-          ? [`${product.marque} bloque les achats automatiques`, "Finis l'achat sur le site en un clic."]
+          ? [
+              `${product.marque} bloque les achats automatiques`,
+              "Finis l'achat sur le site en un clic.",
+            ]
           : order.motif === "connexion"
-          ? [`Connexion ${product.marque} impossible`, order.message ?? "Vérifie le compte enregistré."]
-          : ["Commande interrompue", order.message ?? "L'agent n'a pas pu terminer."],
+            ? [
+                `Connexion ${product.marque} impossible`,
+                order.message ?? "Vérifie le compte enregistré.",
+              ]
+            : ["Commande interrompue", order.message ?? "L'agent n'a pas pu terminer."],
   };
   const [title, body] = texts[signal] ?? ["BuyFit", ""];
   notify(title, body);
@@ -209,7 +227,9 @@ async function openAgentTab(url: string) {
     await browser.tabs.create({
       url,
       active: false,
-      ...(origin ? { index: origin.index + 1, openerTabId: origin.id, windowId: origin.windowId } : {}),
+      ...(origin
+        ? { index: origin.index + 1, openerTabId: origin.id, windowId: origin.windowId }
+        : {}),
     });
   } catch (e) {
     console.debug("[buyfit] onglet de l'agent non ouvert", e);

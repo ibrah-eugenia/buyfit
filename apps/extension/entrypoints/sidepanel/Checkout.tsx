@@ -39,7 +39,13 @@ export function Checkout({ purchase }: { purchase: Purchase }) {
 
   const cart: StepState = purchase.deliveryDone || etape || done ? "done" : "active";
   const delivery: StepState =
-    step === "livraison" ? "waiting" : reached("livraison") || purchase.paymentDone || done ? "done" : purchase.deliveryDone ? "active" : "todo";
+    step === "livraison"
+      ? "waiting"
+      : reached("livraison") || purchase.paymentDone || done
+        ? "done"
+        : purchase.deliveryDone
+          ? "active"
+          : "todo";
   const payment: StepState =
     step === "paiement" || step === "banque"
       ? "waiting"
@@ -88,8 +94,8 @@ export function Checkout({ purchase }: { purchase: Purchase }) {
             </div>
             <h2>{product.marque} bloque les achats automatiques</h2>
             <p>
-              Le site a affiché une vérification anti-robot : l'agent s'est arrêté sans la contourner.
-              Finis l'achat toi-même, en taille {size}
+              Le site a affiché une vérification anti-robot : l'agent s'est arrêté sans la
+              contourner. Finis l'achat toi-même, en taille {size}
               {purchase.sizeEquivalent && <> ({purchase.sizeEquivalent})</>}.
             </p>
           </div>
@@ -123,7 +129,9 @@ export function Checkout({ purchase }: { purchase: Purchase }) {
           </div>
         ) : failed ? (
           <div className="status">
-            <p className="error">{order?.message ?? error ?? "L'agent n'a pas pu terminer la commande."}</p>
+            <p className="error">
+              {order?.message ?? error ?? "L'agent n'a pas pu terminer la commande."}
+            </p>
           </div>
         ) : (
           <>
@@ -183,13 +191,22 @@ export function Checkout({ purchase }: { purchase: Purchase }) {
             )}
 
             {!step && order?.message && <p className="checkout-msg">{order.message}</p>}
-            {!step && <p className="checkout-msg">L'agent travaille dans un onglet en arrière-plan : tu peux continuer sur Pinterest.</p>}
+            {!step && (
+              <p className="checkout-msg">
+                L'agent travaille dans un onglet en arrière-plan : tu peux continuer sur Pinterest.
+              </p>
+            )}
             {error && <p className="error">{error}</p>}
           </>
         )}
 
         {order?.agentViewUrl && !terminal && (
-          <a className="link-btn agent-link" href={order.agentViewUrl} target="_blank" rel="noreferrer">
+          <a
+            className="link-btn agent-link"
+            href={order.agentViewUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
             Voir l'agent en direct ↗
           </a>
         )}
@@ -206,11 +223,25 @@ export function Checkout({ purchase }: { purchase: Purchase }) {
             {sending ? <Spinner light /> : "Continuer"}
           </button>
         ) : step === "paiement" ? (
-          <button type="button" className="btn primary" disabled={sending} onClick={() => void answer()}>
-            {sending ? <Spinner light /> : `Confirmer le paiement${order?.total ? ` · ${order.total}` : ""}`}
+          <button
+            type="button"
+            className="btn primary"
+            disabled={sending}
+            onClick={() => void answer()}
+          >
+            {sending ? (
+              <Spinner light />
+            ) : (
+              `Confirmer le paiement${order?.total ? ` · ${order.total}` : ""}`
+            )}
           </button>
         ) : step === "banque" ? (
-          <button type="button" className="btn primary" disabled={sending} onClick={() => void answer()}>
+          <button
+            type="button"
+            className="btn primary"
+            disabled={sending}
+            onClick={() => void answer()}
+          >
             {sending ? <Spinner light /> : "J'ai validé dans mon appli"}
           </button>
         ) : siteBlocked ? (
@@ -263,15 +294,15 @@ export function PurchaseBanner({ purchase, onShow }: { purchase: Purchase; onSho
       ? "Rupture de stock"
       : siteBlocked
         ? `Finis l'achat sur ${purchase.product.marque}`
-      : failed
-      ? "Commande interrompue"
-      : step === "livraison"
-        ? "Choisis ta livraison"
-        : step === "paiement"
-          ? "Confirme le paiement"
-          : step === "banque"
-            ? "Valide dans ton appli bancaire"
-            : "Achat en cours…";
+        : failed
+          ? "Commande interrompue"
+          : step === "livraison"
+            ? "Choisis ta livraison"
+            : step === "paiement"
+              ? "Confirme le paiement"
+              : step === "banque"
+                ? "Valide dans ton appli bancaire"
+                : "Achat en cours…";
   return (
     <button type="button" className={`purchase-banner${step ? " attention" : ""}`} onClick={onShow}>
       {!step && !done && !failed ? <Spinner /> : <span className="banner-dot" aria-hidden="true" />}
@@ -287,28 +318,64 @@ export function PurchaseBanner({ purchase, onShow }: { purchase: Purchase; onSho
 }
 
 const CheckIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
-    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="3"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
     <path d="M5 12l5 5L20 7" />
   </svg>
 );
 const ShieldIcon = () => (
-  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
-    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg
+    width="26"
+    height="26"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
     <path d="M12 3l8 3v6c0 4.5-3.4 8.2-8 9-4.6-.8-8-4.5-8-9V6l8-3z" />
     <path d="M9 12h6" />
   </svg>
 );
 const BoxIcon = () => (
-  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
-    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg
+    width="26"
+    height="26"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
     <path d="M3 7.5L12 3l9 4.5v9L12 21l-9-4.5v-9z" />
     <path d="M3 7.5l9 4.5 9-4.5M12 12v9M9 10.5l6-3" />
   </svg>
 );
 const BankIcon = () => (
-  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
-    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg
+    width="28"
+    height="28"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
     <rect x="6" y="2" width="12" height="20" rx="2.5" />
     <path d="M10 18h4M9.5 10.5l2 2 3.5-4" />
   </svg>

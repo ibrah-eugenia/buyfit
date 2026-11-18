@@ -1,5 +1,11 @@
 /** Symbole BuyFit : un B traversé d'une barre, comme un dollar (cf. brand kit). */
-export function Symbol({ color = "currentColor", stroke = 26 }: { color?: string; stroke?: number }) {
+export function Symbol({
+  color = "currentColor",
+  stroke = 26,
+}: {
+  color?: string;
+  stroke?: number;
+}) {
   return (
     <svg viewBox="15 -8 100 176" aria-hidden="true">
       <path

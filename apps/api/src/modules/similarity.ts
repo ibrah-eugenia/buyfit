@@ -13,7 +13,9 @@ const MIN_SCORE = 6;
 const IMAGE_TIMEOUT_MS = 4_000;
 const MODEL_TIMEOUT_MS = 20_000;
 
-const PROMPT = (n: number) => `Tu compares des vêtements. La PREMIÈRE image est la pièce de référence.
+const PROMPT = (
+  n: number,
+) => `Tu compares des vêtements. La PREMIÈRE image est la pièce de référence.
 Les ${n} images suivantes (numérotées de 1 à ${n}) sont des produits trouvés en boutique.
 Vérifie d'abord la COULEUR (teinte exacte : beige ≠ marron ≠ gris) puis la COUPE
 (ex. croisé ou droit, longueur, col, ajusté ou ample), puis le motif et la matière.
@@ -37,15 +39,24 @@ export async function filterBySimilarity(
     const usable = candidates.flatMap((p, i) => (images[i] ? [{ p, img: images[i] }] : []));
     if (!usable.length) return { resultats: candidates, filtreIA: false };
 
-    const scores = await scoreImages(referenceDataUrl, usable.map((u) => u.img));
+    const scores = await scoreImages(
+      referenceDataUrl,
+      usable.map((u) => u.img),
+    );
     const resultats = usable
       .map(({ p }, i) => ({ ...p, score: Math.round(((scores[i] ?? 0) / 10) * 100) / 100 }))
       .filter((p) => p.score * 10 >= MIN_SCORE)
       .sort((a, b) => b.score - a.score);
-    console.info(`[similarity] ${resultats.length}/${usable.length} retenus en ${Date.now() - started} ms`, scores);
+    console.info(
+      `[similarity] ${resultats.length}/${usable.length} retenus en ${Date.now() - started} ms`,
+      scores,
+    );
     return { resultats, filtreIA: true };
   } catch (err) {
-    console.warn(`[similarity] filtre ignoré (${Date.now() - started} ms) :`, err instanceof Error ? err.message.slice(0, 200) : err);
+    console.warn(
+      `[similarity] filtre ignoré (${Date.now() - started} ms) :`,
+      err instanceof Error ? err.message.slice(0, 200) : err,
+    );
     return { resultats: candidates, filtreIA: false };
   }
 }
@@ -80,7 +91,8 @@ export function parseScores(text: string, n: number): number[] {
   const raw = text.match(/\[[\d\s.,]*\]/)?.[0];
   const arr = raw ? (JSON.parse(raw) as unknown[]) : [];
   const scores = arr.map((v) => Math.min(10, Math.max(0, Number(v) || 0)));
-  if (scores.length !== n) throw new Error(`Notes inattendues (${scores.length}/${n}) : ${text.slice(0, 120)}`);
+  if (scores.length !== n)
+    throw new Error(`Notes inattendues (${scores.length}/${n}) : ${text.slice(0, 120)}`);
   return scores;
 }
 
