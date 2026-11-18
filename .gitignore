@@ -33,6 +33,7 @@ Thumbs.db
 __pycache__/
 .venv/
 *.pyc
+services/tryon/.results/
 
 # Misc
 coverage/
