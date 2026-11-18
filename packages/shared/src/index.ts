@@ -6,3 +6,4 @@ export * from "./product.js";
 export * from "./tryon.js";
 export * from "./order.js";
 export * from "./api.js";
+export * from "./sizes.js";

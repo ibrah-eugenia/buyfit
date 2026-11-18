@@ -16,6 +16,7 @@ import {
   OrderStatusSchema,
   TryOnApiRequestSchema,
   TryOnResultSchema,
+  sizeEquivalents,
   type ApiError,
   type OrderStatus,
 } from "@buyfit/shared";
@@ -93,6 +94,7 @@ const toStatus = (o: OrderRecord, message?: string, state?: SessionState): Order
           ...(state.total ? { total: state.total } : {}),
         }
       : {}),
+    ...(state?.motif && o.statut === "echec" ? { motif: state.motif } : {}),
     updatedAt: o.updatedAt,
   });
 
@@ -188,6 +190,10 @@ app.post("/order", async (c) => {
     startOrderSession({
       productUrl: req.productUrl,
       taille: req.taille,
+      equivalents: sizeEquivalents(req.taille, {
+        ...(req.genre ? { genre: req.genre } : {}),
+        ...(req.categorie ? { categorie: req.categorie } : {}),
+      }),
       ...(compte ? { compte } : {}),
     }),
   );

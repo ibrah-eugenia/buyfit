@@ -5,8 +5,13 @@ import {
   hidePurchase,
   isTerminal,
   pendingStep,
+  retryWithSize,
   type Purchase,
 } from "@/lib/purchase";
+
+const SIZES = ["XS", "S", "M", "L", "XL", "XXL"];
+const formatPrice = (prix: number, devise: string) =>
+  new Intl.NumberFormat("fr-FR", { style: "currency", currency: devise }).format(prix);
 import { Spinner } from "./Spinner";
 
 type StepState = "todo" | "active" | "waiting" | "done";
@@ -18,6 +23,9 @@ type StepState = "todo" | "active" | "waiting" | "done";
 export function Checkout({ purchase }: { purchase: Purchase }) {
   const { product, size, order, error, sending } = purchase;
   const [livraison, setLivraison] = useState<string | null>(null);
+  const [newSize, setNewSize] = useState<string | null>(null);
+  const outOfStock = order?.statut === "echec" && order.motif === "rupture";
+  const siteBlocked = order?.statut === "echec" && order.motif === "site_bloque";
 
   const step = pendingStep(purchase);
   const done = order?.statut === "commandee";
@@ -57,6 +65,8 @@ export function Checkout({ purchase }: { purchase: Purchase }) {
           <div>
             <div className="checkout-store">
               {product.marque} · Taille {size}
+              {purchase.sizeEquivalent && <> ({purchase.sizeEquivalent})</>}
+              {product.prix > 0 && <> · {formatPrice(product.prix, product.devise)}</>}
             </div>
             <div className="piece-name">{product.nom}</div>
           </div>
@@ -70,6 +80,46 @@ export function Checkout({ purchase }: { purchase: Purchase }) {
             <h2>Commande validée</h2>
             {order?.message && <p>{order.message}</p>}
             <p>Tu vas recevoir l'e-mail de confirmation de {product.marque}.</p>
+          </div>
+        ) : siteBlocked ? (
+          <div className="status stock">
+            <div className="stock-icon" aria-hidden="true">
+              <ShieldIcon />
+            </div>
+            <h2>{product.marque} bloque les achats automatiques</h2>
+            <p>
+              Le site a affiché une vérification anti-robot : l'agent s'est arrêté sans la contourner.
+              Finis l'achat toi-même, en taille {size}
+              {purchase.sizeEquivalent && <> ({purchase.sizeEquivalent})</>}.
+            </p>
+          </div>
+        ) : outOfStock ? (
+          <div className="status stock">
+            <div className="stock-icon" aria-hidden="true">
+              <BoxIcon />
+            </div>
+            <h2>Rupture de stock</h2>
+            <p>
+              Cet article n'est plus disponible en taille {size} chez {product.marque}.
+            </p>
+            <div className="field">
+              <span className="label">Essayer une autre taille</span>
+              <div className="size-row" role="radiogroup" aria-label="Autre taille">
+                {SIZES.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    role="radio"
+                    aria-checked={newSize === s}
+                    disabled={s === size}
+                    className={`chip${newSize === s ? " on" : ""}`}
+                    onClick={() => setNewSize(s)}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         ) : failed ? (
           <div className="status">
@@ -163,6 +213,29 @@ export function Checkout({ purchase }: { purchase: Purchase }) {
           <button type="button" className="btn primary" disabled={sending} onClick={() => void answer()}>
             {sending ? <Spinner light /> : "J'ai validé dans mon appli"}
           </button>
+        ) : siteBlocked ? (
+          <div className="actions-row">
+            <button type="button" className="btn secondary" onClick={clearPurchase}>
+              Autre article
+            </button>
+            <a className="btn primary" href={product.url} target="_blank" rel="noreferrer">
+              Finir sur {product.marque}
+            </a>
+          </div>
+        ) : outOfStock ? (
+          <div className="actions-row">
+            <button type="button" className="btn secondary" onClick={clearPurchase}>
+              Autre article
+            </button>
+            <button
+              type="button"
+              className="btn primary"
+              disabled={!newSize}
+              onClick={() => newSize && retryWithSize(newSize)}
+            >
+              {newSize ? `Acheter en ${newSize}` : "Choisis une taille"}
+            </button>
+          </div>
         ) : terminal ? (
           <button type="button" className="btn secondary" onClick={clearPurchase}>
             Retour aux résultats
@@ -182,9 +255,15 @@ export function PurchaseBanner({ purchase, onShow }: { purchase: Purchase; onSho
   const step = pendingStep(purchase);
   const done = purchase.order?.statut === "commandee";
   const failed = purchase.order?.statut === "echec";
+  const outOfStock = failed && purchase.order?.motif === "rupture";
+  const siteBlocked = failed && purchase.order?.motif === "site_bloque";
   const label = done
     ? "Commande validée"
-    : failed
+    : outOfStock
+      ? "Rupture de stock"
+      : siteBlocked
+        ? `Finis l'achat sur ${purchase.product.marque}`
+      : failed
       ? "Commande interrompue"
       : step === "livraison"
         ? "Choisis ta livraison"
@@ -211,6 +290,20 @@ const CheckIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
     strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M5 12l5 5L20 7" />
+  </svg>
+);
+const ShieldIcon = () => (
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 3l8 3v6c0 4.5-3.4 8.2-8 9-4.6-.8-8-4.5-8-9V6l8-3z" />
+    <path d="M9 12h6" />
+  </svg>
+);
+const BoxIcon = () => (
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M3 7.5L12 3l9 4.5v9L12 21l-9-4.5v-9z" />
+    <path d="M3 7.5l9 4.5 9-4.5M12 12v9M9 10.5l6-3" />
   </svg>
 );
 const BankIcon = () => (

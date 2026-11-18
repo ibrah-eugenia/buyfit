@@ -7,6 +7,9 @@ export const OrderRequestSchema = z.object({
   /** Page produit : l'agent H Company en a besoin pour naviguer. */
   productUrl: z.url(),
   taille: z.string().min(1),
+  /** Pièce identifiée : sert à traduire la taille lettre en taille numérique (L → 52–54). */
+  genre: z.enum(["homme", "femme", "mixte"]).optional(),
+  categorie: z.string().max(60).optional(),
 });
 export type OrderRequest = z.infer<typeof OrderRequestSchema>;
 
@@ -45,6 +48,10 @@ export type LivraisonOption = z.infer<typeof LivraisonOptionSchema>;
 export const OrderEtapeSchema = z.enum(["livraison", "paiement", "banque"]);
 export type OrderEtape = z.infer<typeof OrderEtapeSchema>;
 
+/** Pourquoi l'agent s'est arrêté (statut `echec`) : l'extension adapte le message et les actions. */
+export const OrderMotifSchema = z.enum(["rupture", "connexion", "site_bloque", "autre"]);
+export type OrderMotif = z.infer<typeof OrderMotifSchema>;
+
 export const OrderStatusSchema = z.object({
   orderId: z.string().min(1),
   statut: OrderStatutSchema,
@@ -56,6 +63,7 @@ export const OrderStatusSchema = z.object({
   livraisons: z.array(LivraisonOptionSchema).optional(),
   /** Total affiché par le marchand avant paiement (devise incluse). */
   total: z.string().optional(),
+  motif: OrderMotifSchema.optional(),
   updatedAt: IsoDateTimeSchema,
 });
 export type OrderStatus = z.infer<typeof OrderStatusSchema>;

@@ -102,6 +102,13 @@ L'agent fait deux pauses en `confirmation_requise`, distinguées par `etape` :
 | `paiement`  | sur la dernière page avant le paiement        | `total` (ex. `"75,90 €"`), `message` = récapitulatif |
 | `banque`    | sur la validation bancaire (3-D Secure)       | `message` ; l'utilisateur valide dans son appli |
 
+En `echec`, `motif` précise la cause : `rupture` (article ou taille indisponible), `connexion`
+(compte marchand refusé), `site_bloque` (CAPTCHA / anti-robot : l'agent s'arrête sans contourner,
+l'utilisateur finit l'achat sur le site) ou `autre`.
+
+`OrderRequest` accepte aussi `genre` et `categorie` (pièce identifiée) : l'API en déduit les
+tailles numériques équivalentes (`sizeEquivalents`, ex. L en veste homme → 52 ou 54) pour l'agent.
+
 ## `POST /order/:id/confirm` (ajout — livraison puis garde-fou paiement)
 
 Réponse de l'utilisateur quand la commande est en `confirmation_requise` :

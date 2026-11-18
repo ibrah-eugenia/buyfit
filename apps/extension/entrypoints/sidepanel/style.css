@@ -1406,3 +1406,50 @@ a.see {
   color: var(--ink);
   line-height: 1.45;
 }
+
+
+/* ---------- Rupture de stock ---------- */
+.status.stock {
+  justify-content: flex-start;
+  padding-top: 8px;
+}
+.status.stock h2 {
+  margin: 0;
+}
+.status.stock .field {
+  width: 100%;
+  text-align: left;
+}
+.stock-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--blush);
+  color: var(--brand);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.size-row .chip:disabled {
+  opacity: 0.35;
+  cursor: default;
+  text-decoration: line-through;
+}
+
+.piece-size {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--grey);
+}
+
+a.btn {
+  text-decoration: none;
+}
+.handoff-note {
+  margin: 0;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--grey);
+}

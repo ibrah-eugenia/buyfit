@@ -1,6 +1,7 @@
-import type { ProductMatch } from "@buyfit/shared";
+import { sizeEquivalentLabel, type ProductMatch } from "@buyfit/shared";
 import { useEffect, useState } from "react";
 import { startPurchase } from "@/lib/purchase";
+import { isHandoffStore } from "@/lib/stores";
 import type { Piece } from "./Home";
 import { Spinner } from "./Spinner";
 
@@ -32,14 +33,28 @@ export function Results({
   onRestart: () => void;
   onRetry?: (() => void) | undefined;
 }) {
-  const buy = (p: ProductMatch) => void startPurchase(p, size ?? "M", userId);
+  const item = piece.kind === "ready" ? piece.item : undefined;
+  const meta = {
+    ...(item?.genre ? { genre: item.genre } : {}),
+    ...(item?.categorie ? { categorie: item.categorie } : {}),
+  };
+  const equivalent = size ? sizeEquivalentLabel(size, meta) : "";
+  const buy = (p: ProductMatch) => void startPurchase(p, size ?? "M", userId, meta);
   return (
     <div className="screen">
       <div className="content">
         <div className="piece">
           <img className="thumb" src={piece.cropUrl} alt="Pièce sélectionnée" />
-          <div className="piece-name">
-            {piece.kind === "ready" ? piece.item.nom : piece.kind === "loading" ? "Analyse de la pièce…" : "Pièce non reconnue"}
+          <div>
+            <div className="piece-name">
+              {piece.kind === "ready" ? piece.item.nom : piece.kind === "loading" ? "Analyse de la pièce…" : "Pièce non reconnue"}
+            </div>
+            {size && piece.kind === "ready" && (
+              <div className="piece-size">
+                Taille {size}
+                {equivalent && <> · équivalent {equivalent}</>}
+              </div>
+            )}
           </div>
         </div>
 
@@ -53,6 +68,7 @@ export function Results({
               key={search.resultats.map((r) => r.id).join()}
               items={search.resultats}
               onBuy={buy}
+              sizeNote={size ? `Taille ${size}${equivalent ? ` (${equivalent})` : ""}` : ""}
             />
           ) : (
             <Status text="Aucun article assez ressemblant chez Zara, Mango ou Uniqlo." />
@@ -95,7 +111,15 @@ function Status({
   );
 }
 
-function Carousel({ items, onBuy }: { items: ProductMatch[]; onBuy: (p: ProductMatch) => void }) {
+function Carousel({
+  items,
+  onBuy,
+  sizeNote,
+}: {
+  items: ProductMatch[];
+  onBuy: (p: ProductMatch) => void;
+  sizeNote: string;
+}) {
   const [i, setI] = useState(0);
   const p = items[Math.min(i, items.length - 1)]!;
   const go = (d: number) => setI((cur) => (cur + d + items.length) % items.length);
@@ -131,9 +155,19 @@ function Carousel({ items, onBuy }: { items: ProductMatch[]; onBuy: (p: ProductM
                 {p.prix > 0 ? "Voir" : "Voir le prix"} <ExternalIcon />
               </a>
             </div>
-            <button type="button" className="btn primary buy" onClick={() => onBuy(p)}>
-              Acheter
-            </button>
+            {isHandoffStore(p.marque) ? (
+              // Magasin qui bloque les agents : l'utilisateur finit l'achat sur le site.
+              <a className="btn primary buy" href={p.url} target="_blank" rel="noreferrer">
+                Acheter sur {p.marque} <ExternalIcon />
+              </a>
+            ) : (
+              <button type="button" className="btn primary buy" onClick={() => onBuy(p)}>
+                Acheter
+              </button>
+            )}
+            {isHandoffStore(p.marque) && sizeNote && (
+              <p className="handoff-note">{sizeNote} · achat à finaliser sur le site</p>
+            )}
           </div>
         </article>
         {items.length > 1 && (

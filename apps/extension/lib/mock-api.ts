@@ -42,7 +42,7 @@ const PRODUCTS: ProductMatch[] = [
 
 const orders = new Map<
   string,
-  { startedAt: number; deliveryAt?: number; confirmedAt?: number; bankAt?: number }
+  { startedAt: number; deliveryAt?: number; confirmedAt?: number; bankAt?: number; taille?: string }
 >();
 const LIVRAISONS = [
   { id: "standard", label: "Livraison standard", prix: "Gratuit", delai: "3 à 5 jours ouvrés" },
@@ -75,6 +75,13 @@ function status(orderId: string): OrderStatus {
   }
   const t = Date.now() - o.startedAt;
   if (t < 2000) return { ...base, statut: "en_attente" };
+  // Simulations : XS = vérification anti-robot, XXL = rupture de stock.
+  if (o.taille === "XS" && t > 3500) {
+    return { ...base, statut: "echec", motif: "site_bloque", message: "Vérification anti-robot affichée par le site." };
+  }
+  if (o.taille === "XXL" && t > 3500) {
+    return { ...base, statut: "echec", motif: "rupture", message: "Taille XXL indisponible : « Rupture de stock » affichée sur la page produit." };
+  }
   if (t < 6000) return { ...base, statut: "en_cours", message: "L'agent ajoute l'article au panier…" };
   return { ...base, statut: "confirmation_requise", etape: "livraison", livraisons: LIVRAISONS };
 }
@@ -115,10 +122,10 @@ export const mockApi: BuyFitApi = {
     await wait(1500);
     return { resultImageUrl: req.garmentImageUrl, latencyMs: 1500 };
   },
-  async order() {
+  async order(req) {
     await wait(500);
     const id = crypto.randomUUID();
-    orders.set(id, { startedAt: Date.now() });
+    orders.set(id, { startedAt: Date.now(), taille: req.taille });
     return { ...status(id), agentViewUrl: "https://platform.eu.hcompany.ai/agent-view/mock" };
   },
   async getOrder(id) {

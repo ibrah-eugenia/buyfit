@@ -15,7 +15,13 @@
  */
 import { HaiAgentsClient } from "hai-agents";
 import { z } from "zod";
-import type { CompteMarchand, LivraisonOption, OrderEtape, OrderStatut } from "@buyfit/shared";
+import type {
+  CompteMarchand,
+  LivraisonOption,
+  OrderEtape,
+  OrderMotif,
+  OrderStatut,
+} from "@buyfit/shared";
 import { config } from "../config.js";
 
 let client: HaiAgentsClient | null = null;
@@ -53,12 +59,18 @@ export const OrderAnswerSchema = z.object({
     .string()
     .nullable()
     .describe("If blocked: what is missing (login, out of stock, captcha…)"),
+  motif: z
+    .enum(["out_of_stock", "login_failed", "bot_blocked", "other"])
+    .nullable()
+    .describe("If blocked: out_of_stock = item or size unavailable; login_failed = cannot log in; bot_blocked = CAPTCHA, anti-bot check or access denied; other = anything else. Else null"),
 });
 export type OrderAnswer = z.infer<typeof OrderAnswerSchema>;
 
 export interface StartOrderInput {
   productUrl: string;
   taille: string;
+  /** Tailles numériques équivalentes (ex. ["52", "54"] pour L en veste homme). */
+  equivalents?: string[];
   compte?: CompteMarchand;
 }
 
@@ -73,21 +85,36 @@ export interface SessionState {
   etape?: OrderEtape;
   livraisons?: LivraisonOption[];
   total?: string;
+  motif?: OrderMotif;
 }
 
-const orderPrompt = ({ productUrl, taille, compte }: StartOrderInput) =>
+const MOTIFS: Record<string, OrderMotif> = {
+  out_of_stock: "rupture",
+  login_failed: "connexion",
+  bot_blocked: "site_bloque",
+  other: "autre",
+};
+
+const orderPrompt = ({ productUrl, taille, equivalents = [], compte }: StartOrderInput) =>
   [
     `Va sur la page produit ${productUrl}.`,
     `Sélectionne la taille "${taille}" et ajoute l'article au panier.`,
+    ...(equivalents.length
+      ? [
+          `Si le site affiche des tailles numériques au lieu de lettres, prends l'équivalent de ${taille} : ${equivalents.join(" ou ")} (la première disponible).`,
+        ]
+      : []),
     compte
       ? `Si une connexion est demandée, connecte-toi au compte ${compte.marchand} avec les identifiants enregistrés.`
-      : "Si une connexion est demandée, arrête-toi avec etape=blocked et explique ce qui manque.",
+      : "Si une connexion est demandée, arrête-toi avec etape=blocked, motif=login_failed, et explique ce qui manque.",
     "Ouvre le panier et clique sur « Passer commande » (ou équivalent).",
     "Garde l'adresse enregistrée. Arrête-toi sur l'étape du choix du mode de livraison, SANS en choisir :",
     "réponds avec etape=delivery_choice et la liste des modes proposés (libellé, prix, délai).",
     "S'il n'y a qu'un seul mode, continue jusqu'à la dernière page avant le paiement et réponds avec etape=ready_to_pay.",
     "IMPORTANT : ne clique JAMAIS sur le bouton final de paiement / validation de commande.",
-    "Si l'article ou la taille est indisponible, réponds avec etape=blocked.",
+    "Si l'article ou la taille est indisponible (rupture de stock), réponds avec etape=blocked et motif=out_of_stock.",
+    "Si le site affiche un CAPTCHA, une vérification anti-robot ou un accès refusé, ne tente PAS de le résoudre ni de le contourner :",
+    "réponds tout de suite avec etape=blocked et motif=bot_blocked.",
   ].join("\n");
 
 const deliveryPrompt = (option: LivraisonOption) =>
@@ -121,7 +148,14 @@ const deliveryChosen = new Set<string>();
 const bankApproved = new Set<string>();
 
 // ---------- mock ----------
-type MockSession = { startedAt: number; deliveryAt?: number; confirmedAt?: number; bankAt?: number };
+type MockSession = {
+  startedAt: number;
+  deliveryAt?: number;
+  confirmedAt?: number;
+  bankAt?: number;
+  taille?: string;
+  site?: string;
+};
 const mockSessions = new Map<string, MockSession>();
 const MOCK_LIVRAISONS: LivraisonOption[] = [
   { id: "standard", label: "Livraison standard", prix: "Gratuit", delai: "3 à 5 jours ouvrés" },
@@ -132,7 +166,7 @@ const MOCK_LIVRAISONS: LivraisonOption[] = [
 export async function startOrderSession(input: StartOrderInput): Promise<SessionInfo> {
   if (config.mocks.hcompany) {
     const sessionId = `mock-session-${crypto.randomUUID()}`;
-    mockSessions.set(sessionId, { startedAt: Date.now() });
+    mockSessions.set(sessionId, { startedAt: Date.now(), taille: input.taille, site: input.productUrl });
     return { sessionId, agentViewUrl: null };
   }
   const overrides: Record<string, unknown> = {};
@@ -222,7 +256,7 @@ function fromAnswer(
   const a = parsed.data;
   switch (a.etape) {
     case "blocked":
-      return { statut: "echec", message: a.raison ?? a.resume };
+      return { statut: "echec", message: a.raison ?? a.resume, motif: MOTIFS[a.motif ?? "other"] ?? "autre" };
     case "delivery_choice":
       // Choix envoyé mais le 2e tour n'a pas encore produit de réponse : on attend.
       return delivery || !a.livraisons?.length
@@ -275,6 +309,12 @@ function mockState(sessionId: string): SessionState {
   }
   const elapsed = since(s.startedAt);
   if (elapsed < 2000) return { statut: "en_attente" };
+  if (s.site?.includes("mango") && elapsed > 4000) {
+    return { statut: "echec", motif: "site_bloque", message: "Vérification anti-robot affichée par le site." };
+  }
+  if (s.taille === "XXL" && elapsed > 4000) {
+    return { statut: "echec", motif: "rupture", message: "Taille XXL indisponible : « Rupture de stock » affichée sur la page produit." };
+  }
   if (elapsed < 8000) return { statut: "en_cours", message: "L'agent ajoute l'article au panier…" };
   return { statut: "confirmation_requise", etape: "livraison", livraisons: MOCK_LIVRAISONS };
 }
