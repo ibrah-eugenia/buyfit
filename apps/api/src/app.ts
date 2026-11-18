@@ -23,6 +23,7 @@ import { config } from "./config.js";
 import { HttpError, upstream } from "./errors.js";
 import { findMatches, serpShopping } from "./modules/brightdata.js";
 import {
+  bankApprovedSession,
   chooseDeliverySession,
   confirmOrderSession,
   getSessionState,
@@ -239,6 +240,12 @@ app.post("/order/:id/confirm", async (c) => {
     await call("hcompany", () => chooseDeliverySession(hSessionId, option));
     order = await call("supabase", () => updateOrder(order.id, { statut: "en_cours" }));
     return c.json(toStatus(order, `${option.label} choisie, l'agent continue…`));
+  }
+
+  if (state.etape === "banque") {
+    await call("hcompany", () => bankApprovedSession(hSessionId));
+    order = await call("supabase", () => updateOrder(order.id, { statut: "en_cours" }));
+    return c.json(toStatus(order, "Vérification du paiement…"));
   }
 
   await call("hcompany", () => confirmOrderSession(hSessionId));

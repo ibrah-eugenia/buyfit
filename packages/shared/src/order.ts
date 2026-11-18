@@ -38,9 +38,11 @@ export type LivraisonOption = z.infer<typeof LivraisonOptionSchema>;
 /**
  * Pause de l'agent quand statut = `confirmation_requise` :
  * - `livraison` : l'utilisateur choisit un mode de livraison (`livraisons`) ;
- * - `paiement` : récapitulatif + total, l'utilisateur confirme le paiement.
+ * - `paiement` : récapitulatif + total, l'utilisateur confirme le paiement ;
+ * - `banque` : la banque demande une validation (3-D Secure, appli bancaire) ; l'utilisateur
+ *   la fait sur son téléphone puis le signale (POST /order/:id/confirm sans corps).
  */
-export const OrderEtapeSchema = z.enum(["livraison", "paiement"]);
+export const OrderEtapeSchema = z.enum(["livraison", "paiement", "banque"]);
 export type OrderEtape = z.infer<typeof OrderEtapeSchema>;
 
 export const OrderStatusSchema = z.object({

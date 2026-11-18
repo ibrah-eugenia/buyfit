@@ -100,6 +100,7 @@ L'agent fait deux pauses en `confirmation_requise`, distinguées par `etape` :
 | ----------- | --------------------------------------------- | ------------------------------------- |
 | `livraison` | sur le choix du mode de livraison (panier OK) | `livraisons: { id, label, prix?, delai? }[]` |
 | `paiement`  | sur la dernière page avant le paiement        | `total` (ex. `"75,90 €"`), `message` = récapitulatif |
+| `banque`    | sur la validation bancaire (3-D Secure)       | `message` ; l'utilisateur valide dans son appli |
 
 ## `POST /order/:id/confirm` (ajout — livraison puis garde-fou paiement)
 
@@ -108,6 +109,7 @@ Réponse de l'utilisateur quand la commande est en `confirmation_requise` :
 - étape `livraison` : `{ livraison: "<id>" }` → l'agent choisit ce mode et va jusqu'à la page de
   paiement (nouvelle pause, étape `paiement`) ;
 - étape `paiement` : corps vide → feu vert explicite, l'agent clique sur le bouton final de paiement.
+- étape `banque` : corps vide → l'utilisateur a validé dans son appli bancaire, l'agent vérifie la confirmation.
 
 |               | Schéma                                                                   |
 | ------------- | ------------------------------------------------------------------------ |

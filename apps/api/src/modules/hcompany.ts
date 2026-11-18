@@ -4,11 +4,11 @@
  *
  * Parcours en 3 tours, l'agent s'arrête deux fois pour l'utilisateur (session restée `idle`) :
  * 1. Page produit → taille → panier → passer commande, arrêt sur le choix de livraison :
- *    `{ etape: "choix_livraison", livraisons }` → `confirmation_requise` / étape `livraison`.
+ *    `{ etape: "delivery_choice", livraisons }` → `confirmation_requise` / étape `livraison`.
  * 2. POST /order/:id/confirm { livraison } : l'agent choisit ce mode et va jusqu'à la dernière
- *    page AVANT paiement : `{ etape: "panier_pret" }` → `confirmation_requise` / étape `paiement`.
+ *    page AVANT paiement : `{ etape: "ready_to_pay" }` → `confirmation_requise` / étape `paiement`.
  * 3. POST /order/:id/confirm : feu vert explicite, l'agent valide le paiement
- *    `{ etape: "commande_validee" }` → statut `commandee`.
+ *    `{ etape: "order_placed" }` → statut `commandee`.
  * Garde-fou : l'agent ne clique jamais sur le paiement final sans ce 3e tour.
  * La réponse est structurée (answerSchema → `agent.answer_format`) : on ne dépend pas de
  * `outcome`, qu'un agent qui s'arrête volontairement peut noter `partial`.
@@ -21,16 +21,19 @@ import { config } from "../config.js";
 let client: HaiAgentsClient | null = null;
 const hai = () => (client ??= new HaiAgentsClient({ apiKey: config.HAI_API_KEY! }));
 
-/** Lien live + replay de secours si l'API n'en renvoie pas (format observé le 17/11/2026). */
-const fallbackAgentViewUrl = (sessionId: string) =>
-  `https://platform.hcompany.ai/agents/sessions/${sessionId}`;
+/** Lien live + replay. Le SDK appelle la région EU par défaut : l'interface doit être celle
+ * de l'EU, sinon la session est introuvable. */
+const agentViewUrl = (sessionId: string) =>
+  `https://platform.eu.hcompany.ai/agent-view/${sessionId}`;
 
 /** Format de réponse imposé à l'agent, à chaque tour. */
 export const OrderAnswerSchema = z.object({
+  // Valeurs en anglais simple : le modèle Holo n'arrive pas à écrire « bloque » (il produit
+  // « berge » en boucle, session du 17/11/2026 : 400 événements perdus).
   etape: z
-    .enum(["choix_livraison", "panier_pret", "commande_validee", "bloque"])
+    .enum(["delivery_choice", "ready_to_pay", "bank_validation", "order_placed", "blocked"])
     .describe(
-      "choix_livraison = arrêté sur le choix du mode de livraison ; panier_pret = arrêté juste avant le paiement ; commande_validee = paiement validé ; bloque = impossible de continuer",
+      "delivery_choice = stopped on the delivery method choice; ready_to_pay = stopped right before the final payment; bank_validation = the bank asks the user to approve the payment (3-D Secure, banking app); order_placed = payment done; blocked = cannot continue",
     ),
   livraisons: z
     .array(
@@ -42,14 +45,14 @@ export const OrderAnswerSchema = z.object({
       }),
     )
     .nullable()
-    .describe("Si choix_livraison : modes de livraison proposés, sinon null"),
+    .describe("If delivery_choice: the delivery methods offered, else null"),
   resume: z.string().describe("Récapitulatif court : article, taille, livraison"),
   prixTotal: z.string().nullable().describe("Prix total affiché, devise incluse (ex. '69,95 €')"),
   numeroCommande: z.string().nullable().describe("Numéro de commande si validée, sinon null"),
   raison: z
     .string()
     .nullable()
-    .describe("Si bloque : ce qui manque (connexion, rupture, captcha…)"),
+    .describe("If blocked: what is missing (login, out of stock, captcha…)"),
 });
 export type OrderAnswer = z.infer<typeof OrderAnswerSchema>;
 
@@ -78,13 +81,13 @@ const orderPrompt = ({ productUrl, taille, compte }: StartOrderInput) =>
     `Sélectionne la taille "${taille}" et ajoute l'article au panier.`,
     compte
       ? `Si une connexion est demandée, connecte-toi au compte ${compte.marchand} avec les identifiants enregistrés.`
-      : "Si une connexion est demandée, arrête-toi avec etape=bloque et explique ce qui manque.",
+      : "Si une connexion est demandée, arrête-toi avec etape=blocked et explique ce qui manque.",
     "Ouvre le panier et clique sur « Passer commande » (ou équivalent).",
     "Garde l'adresse enregistrée. Arrête-toi sur l'étape du choix du mode de livraison, SANS en choisir :",
-    "réponds avec etape=choix_livraison et la liste des modes proposés (libellé, prix, délai).",
-    "S'il n'y a qu'un seul mode, continue jusqu'à la dernière page avant le paiement et réponds avec etape=panier_pret.",
+    "réponds avec etape=delivery_choice et la liste des modes proposés (libellé, prix, délai).",
+    "S'il n'y a qu'un seul mode, continue jusqu'à la dernière page avant le paiement et réponds avec etape=ready_to_pay.",
     "IMPORTANT : ne clique JAMAIS sur le bouton final de paiement / validation de commande.",
-    "Si l'article ou la taille est indisponible, réponds avec etape=bloque.",
+    "Si l'article ou la taille est indisponible, réponds avec etape=blocked.",
   ].join("\n");
 
 const deliveryPrompt = (option: LivraisonOption) =>
@@ -92,20 +95,33 @@ const deliveryPrompt = (option: LivraisonOption) =>
     `L'utilisateur choisit le mode de livraison « ${option.label} ». Sélectionne-le.`,
     "Continue jusqu'à la dernière page avant le paiement, avec le moyen de paiement enregistré.",
     "IMPORTANT : ne clique PAS sur le bouton final de paiement / validation de commande.",
-    "Arrête-toi juste avant et réponds avec etape=panier_pret, le récapitulatif et le prix total.",
+    "Arrête-toi juste avant et réponds avec etape=ready_to_pay, le récapitulatif et le prix total.",
   ].join("\n");
 
 const CONFIRM_PROMPT = [
   "L'utilisateur a vérifié le récapitulatif et confirme l'achat.",
   "Valide maintenant la commande (bouton final de paiement).",
-  "Réponds avec etape=commande_validee et le numéro de commande, ou etape=bloque si ça échoue.",
+  "Si la banque demande une validation (3-D Secure, code SMS, appli bancaire), ne saisis rien :",
+  "réponds avec etape=bank_validation et attends.",
+  "Sinon réponds avec etape=order_placed et le numéro de commande, ou etape=blocked si ça échoue.",
 ].join("\n");
+
+const BANK_DONE_PROMPT = [
+  "L'utilisateur indique avoir validé le paiement dans son application bancaire.",
+  "Attends que la page de confirmation de commande s'affiche (recharge si besoin).",
+  "Réponds avec etape=order_placed et le numéro de commande, ou etape=blocked si le paiement est refusé.",
+].join("\n");
+
+/** Plafond d'actions par session : un achat complet en demande ~40 à 60. */
+const MAX_STEPS = 100;
 
 /** Sessions dont la livraison est choisie (le 2e tour n'a peut-être pas encore démarré). */
 const deliveryChosen = new Set<string>();
+/** Sessions dont l'utilisateur a signalé la validation bancaire. */
+const bankApproved = new Set<string>();
 
 // ---------- mock ----------
-type MockSession = { startedAt: number; deliveryAt?: number; confirmedAt?: number };
+type MockSession = { startedAt: number; deliveryAt?: number; confirmedAt?: number; bankAt?: number };
 const mockSessions = new Map<string, MockSession>();
 const MOCK_LIVRAISONS: LivraisonOption[] = [
   { id: "standard", label: "Livraison standard", prix: "Gratuit", delai: "3 à 5 jours ouvrés" },
@@ -128,13 +144,12 @@ export async function startOrderSession(input: StartOrderInput): Promise<Session
     messages: orderPrompt(input),
     answerSchema: OrderAnswerSchema,
     idleTimeoutS: 900, // la session attend 15 min la confirmation avant d'être libérée
+    maxSteps: MAX_STEPS, // un agent bloqué ne tourne pas indéfiniment (coût)
     ...(Object.keys(overrides).length ? { overrides } : {}),
   });
-  const full = await session.get().catch(() => null);
-  return {
-    sessionId: session.id,
-    agentViewUrl: full?.agentViewUrl ?? fallbackAgentViewUrl(session.id),
-  };
+  // Lien construit depuis l'id : celui renvoyé par l'API pointe vers l'interface US
+  // (platform.hcompany.ai) alors que la session tourne en EU.
+  return { sessionId: session.id, agentViewUrl: agentViewUrl(session.id) };
 }
 
 /** 2e tour : l'utilisateur a choisi son mode de livraison. */
@@ -146,6 +161,17 @@ export async function chooseDeliverySession(sessionId: string, option: Livraison
     return;
   }
   await hai().session(sessionId).sendMessage({ type: "user_message", message: deliveryPrompt(option) });
+}
+
+/** 4e tour (si 3-D Secure) : l'utilisateur a validé le paiement dans son appli bancaire. */
+export async function bankApprovedSession(sessionId: string): Promise<void> {
+  bankApproved.add(sessionId);
+  if (config.mocks.hcompany) {
+    const s = mockSessions.get(sessionId);
+    if (s) s.bankAt = Date.now();
+    return;
+  }
+  await hai().session(sessionId).sendMessage({ type: "user_message", message: BANK_DONE_PROMPT });
 }
 
 export async function confirmOrderSession(sessionId: string): Promise<void> {
@@ -175,7 +201,11 @@ export async function getSessionState(
       return { statut: "en_cours", message: `L'agent travaille… (${steps ?? 0} étapes)` };
     case "idle":
     case "completed":
-      return fromAnswer(session.latestAnswer, confirmed, deliveryChosen.has(sessionId));
+      return fromAnswer(session.latestAnswer, {
+        confirmed,
+        delivery: deliveryChosen.has(sessionId),
+        bank: bankApproved.has(sessionId),
+      });
     case "interrupted":
       return { statut: "echec", message: "Session interrompue (délai de confirmation dépassé ?)" };
     default: // failed, timed_out
@@ -183,19 +213,22 @@ export async function getSessionState(
   }
 }
 
-function fromAnswer(raw: unknown, confirmed: boolean, delivery: boolean): SessionState {
+function fromAnswer(
+  raw: unknown,
+  { confirmed, delivery, bank }: { confirmed: boolean; delivery: boolean; bank: boolean },
+): SessionState {
   const parsed = OrderAnswerSchema.safeParse(raw);
   if (!parsed.success) return { statut: "echec", message: "Réponse de l'agent illisible." };
   const a = parsed.data;
   switch (a.etape) {
-    case "bloque":
+    case "blocked":
       return { statut: "echec", message: a.raison ?? a.resume };
-    case "choix_livraison":
+    case "delivery_choice":
       // Choix envoyé mais le 2e tour n'a pas encore produit de réponse : on attend.
       return delivery || !a.livraisons?.length
         ? { statut: "en_cours", message: "L'agent finalise la commande…" }
         : { statut: "confirmation_requise", etape: "livraison", livraisons: a.livraisons, message: a.resume };
-    case "panier_pret":
+    case "ready_to_pay":
       // Confirmé mais le 2e tour n'a pas encore produit de réponse : on attend.
       return confirmed
         ? { statut: "en_cours", message: "Validation du paiement…" }
@@ -205,7 +238,15 @@ function fromAnswer(raw: unknown, confirmed: boolean, delivery: boolean): Sessio
             message: a.resume,
             ...(a.prixTotal ? { total: a.prixTotal } : {}),
           };
-    case "commande_validee":
+    case "bank_validation":
+      return bank
+        ? { statut: "en_cours", message: "Vérification du paiement…" }
+        : {
+            statut: "confirmation_requise",
+            etape: "banque",
+            message: "Valide le paiement dans ton application bancaire.",
+          };
+    case "order_placed":
       return {
         statut: "commandee",
         message: a.numeroCommande ? `Commande n° ${a.numeroCommande}` : a.resume,
@@ -217,9 +258,14 @@ function mockState(sessionId: string): SessionState {
   const s = mockSessions.get(sessionId);
   if (!s) return { statut: "echec", message: "Session mock inconnue (API redémarrée ?)" };
   const since = (t: number) => Date.now() - t;
+  if (s.bankAt) {
+    return since(s.bankAt) > 3000
+      ? { statut: "commandee", message: "Commande n° MOCK-1234" }
+      : { statut: "en_cours", message: "Vérification du paiement…" };
+  }
   if (s.confirmedAt) {
     return since(s.confirmedAt) > 3000
-      ? { statut: "commandee", message: "Commande n° MOCK-1234" }
+      ? { statut: "confirmation_requise", etape: "banque", message: "Valide le paiement dans ton application bancaire." }
       : { statut: "en_cours", message: "Validation du paiement…" };
   }
   if (s.deliveryAt) {
