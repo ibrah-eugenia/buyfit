@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="BuyFit">
+  <rect width="32" height="32" rx="7.04" fill="#7A1F2B"/>
+  <svg x="10.72" y="6.72" width="10.56" height="18.56" viewBox="15 -8 100 176">
+    <path d="M30 140 V20 H64 A30 30 0 0 1 64 80 H30 H70 A30 30 0 0 1 70 140 Z" fill="none" stroke="#FFFFFF" stroke-width="30" stroke-linejoin="round"/>
+    <line x1="62" y1="-6" x2="62" y2="166" stroke="#FFFFFF" stroke-width="15"/>
+  </svg>
+</svg>

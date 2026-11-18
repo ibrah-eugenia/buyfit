@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 80" width="250" height="80" role="img" aria-label="BuyFit">
+  <!-- Logotype : la marque remplace le « b », suivie de « uyfit » en Inter Bold, interlettrage −0,05em. -->
+  <svg x="6" y="9" width="35" height="61" viewBox="15 -8 100 176">
+    <path d="M30 140 V20 H64 A30 30 0 0 1 64 80 H30 H70 A30 30 0 0 1 70 140 Z" fill="none" stroke="#7A1F2B" stroke-width="26" stroke-linejoin="round"/>
+    <line x1="62" y1="-6" x2="62" y2="166" stroke="#7A1F2B" stroke-width="13"/>
+  </svg>
+  <text x="42" y="62" font-family="Inter, system-ui, sans-serif" font-weight="700" font-size="70" letter-spacing="-3.5" fill="#7A1F2B">uyfit</text>
+</svg>

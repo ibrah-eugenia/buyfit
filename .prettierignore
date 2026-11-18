@@ -5,3 +5,5 @@ dist
 .next
 pnpm-lock.yaml
 services/tryon
+supabase/.temp
+supabase/.branches

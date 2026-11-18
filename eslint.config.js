@@ -13,7 +13,7 @@ export default tseslint.config(
       "**/.output/**",
       "**/.wxt/**",
       "**/.next/**",
-      "apps/web/**",
+      "**/next-env.d.ts",
       "services/**",
     ],
   },
@@ -28,6 +28,12 @@ export default tseslint.config(
       ],
       "@typescript-eslint/consistent-type-imports": "error",
     },
+  },
+  {
+    files: ["apps/web/**/*.{ts,tsx}"],
+    languageOptions: { globals: { ...globals.browser } },
+    plugins: { "react-hooks": reactHooks },
+    rules: reactHooks.configs.recommended.rules,
   },
   {
     files: ["apps/extension/**/*.{ts,tsx}"],
