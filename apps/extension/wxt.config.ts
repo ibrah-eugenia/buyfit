@@ -18,7 +18,7 @@ export default defineConfig({
   manifest: {
     name: "BuyFit",
     description: "Trouve ce look Pinterest dans ton budget, essaie-le et commande-le.",
-    permissions: ["contextMenus", "scripting", "sidePanel", "storage"],
+    permissions: ["contextMenus", "notifications", "scripting", "sidePanel", "storage"],
     // Hôtes Pinterest : donnent aussi accès à l'URL de l'onglet ouvert (pré-remplissage du lien).
     host_permissions: ["*://*.pinterest.com/*", "*://*.pinterest.fr/*", "*://pin.it/*", "*://i.pinimg.com/*", `${new URL(apiUrl).origin}/*`],
     action: { default_title: "Ouvrir BuyFit" },

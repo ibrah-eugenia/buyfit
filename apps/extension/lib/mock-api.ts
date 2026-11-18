@@ -40,7 +40,10 @@ const PRODUCTS: ProductMatch[] = [
   },
 ];
 
-const orders = new Map<string, { startedAt: number; deliveryAt?: number; confirmedAt?: number }>();
+const orders = new Map<
+  string,
+  { startedAt: number; deliveryAt?: number; confirmedAt?: number; bankAt?: number }
+>();
 const LIVRAISONS = [
   { id: "standard", label: "Livraison standard", prix: "Gratuit", delai: "3 à 5 jours ouvrés" },
   { id: "express", label: "Livraison express", prix: "6,95 €", delai: "24 h" },
@@ -55,9 +58,14 @@ function status(orderId: string): OrderStatus {
     updatedAt: new Date().toISOString(),
   };
   if (!o) return { ...base, statut: "echec", message: "Commande inconnue" };
-  if (o.confirmedAt) {
-    return Date.now() - o.confirmedAt > 3000
+  if (o.bankAt) {
+    return Date.now() - o.bankAt > 2500
       ? { ...base, statut: "commandee", message: "Commande n° MOCK-1234" }
+      : { ...base, statut: "en_cours", message: "Vérification du paiement…" };
+  }
+  if (o.confirmedAt) {
+    return Date.now() - o.confirmedAt > 2500
+      ? { ...base, statut: "confirmation_requise", etape: "banque", message: "Valide le paiement dans ton application bancaire." }
       : { ...base, statut: "en_cours", message: "Validation du paiement…" };
   }
   if (o.deliveryAt) {
@@ -111,7 +119,7 @@ export const mockApi: BuyFitApi = {
     await wait(500);
     const id = crypto.randomUUID();
     orders.set(id, { startedAt: Date.now() });
-    return status(id);
+    return { ...status(id), agentViewUrl: "https://platform.eu.hcompany.ai/agent-view/mock" };
   },
   async getOrder(id) {
     return status(id);
@@ -119,6 +127,7 @@ export const mockApi: BuyFitApi = {
   async confirmOrder(id, livraison) {
     const o = orders.get(id);
     if (o && livraison) o.deliveryAt = Date.now();
+    else if (o?.confirmedAt) o.bankAt = Date.now();
     else if (o) o.confirmedAt = Date.now();
     return status(id);
   },

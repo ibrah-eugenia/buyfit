@@ -1,6 +1,6 @@
 import type { ProductMatch } from "@buyfit/shared";
 import { useEffect, useState } from "react";
-import { Checkout } from "./Checkout";
+import { startPurchase } from "@/lib/purchase";
 import type { Piece } from "./Home";
 import { Spinner } from "./Spinner";
 
@@ -32,10 +32,7 @@ export function Results({
   onRestart: () => void;
   onRetry?: (() => void) | undefined;
 }) {
-  const [buying, setBuying] = useState<ProductMatch | null>(null);
-  if (buying) {
-    return <Checkout product={buying} userId={userId} size={size ?? "M"} onBack={() => setBuying(null)} />;
-  }
+  const buy = (p: ProductMatch) => void startPurchase(p, size ?? "M", userId);
   return (
     <div className="screen">
       <div className="content">
@@ -55,7 +52,7 @@ export function Results({
             <Carousel
               key={search.resultats.map((r) => r.id).join()}
               items={search.resultats}
-              onBuy={setBuying}
+              onBuy={buy}
             />
           ) : (
             <Status text="Aucun article assez ressemblant chez Zara, Mango ou Uniqlo." />

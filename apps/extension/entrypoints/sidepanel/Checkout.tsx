@@ -1,91 +1,53 @@
-import { ORDER_TERMINAL_STATUTS, type OrderStatus, type ProductMatch } from "@buyfit/shared";
-import { useEffect, useRef, useState } from "react";
-import { api } from "@/lib/api";
+import { useState } from "react";
+import {
+  answer,
+  clearPurchase,
+  hidePurchase,
+  isTerminal,
+  pendingStep,
+  type Purchase,
+} from "@/lib/purchase";
 import { Spinner } from "./Spinner";
-
-const POLL_MS = 2500;
-const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 type StepState = "todo" | "active" | "waiting" | "done";
 
 /**
- * Achat par l'agent H Company : page produit → panier → commande, puis deux pauses
- * pour l'utilisateur (mode de livraison, puis confirmation du paiement).
+ * Suivi de l'achat par l'agent H Company. L'agent travaille dans un onglet en arrière-plan ;
+ * ici l'utilisateur répond aux pauses : livraison, paiement, puis validation bancaire si demandée.
  */
-export function Checkout({
-  product,
-  userId,
-  size,
-  onBack,
-}: {
-  product: ProductMatch;
-  userId: string;
-  size: string;
-  onBack: () => void;
-}) {
-  const [order, setOrder] = useState<OrderStatus | null>(null);
-  const [error, setError] = useState<string | null>(null);
+export function Checkout({ purchase }: { purchase: Purchase }) {
+  const { product, size, order, error, sending } = purchase;
   const [livraison, setLivraison] = useState<string | null>(null);
-  const [sending, setSending] = useState(false);
-  // Étapes déjà franchies côté utilisateur (l'agent peut mettre quelques secondes à repartir).
-  const [deliveryDone, setDeliveryDone] = useState(false);
-  const [paymentDone, setPaymentDone] = useState(false);
-  const started = useRef(false);
 
-  // Lancement de l'agent (une seule fois, même en StrictMode).
-  useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-    api
-      .order({ userId, productId: product.id, productUrl: product.url, taille: size })
-      .then(setOrder, (e: unknown) => setError(errMsg(e)));
-  }, [userId, product, size]);
-
-  // Suivi de la session H jusqu'à un statut terminal.
-  const orderId = order?.orderId;
-  const terminal = order ? ORDER_TERMINAL_STATUTS.includes(order.statut) : false;
-  useEffect(() => {
-    if (!orderId || terminal) return;
-    const t = setInterval(() => {
-      api.getOrder(orderId).then(setOrder, (e: unknown) => setError(errMsg(e)));
-    }, POLL_MS);
-    return () => clearInterval(t);
-  }, [orderId, terminal]);
-
-  const pause = order?.statut === "confirmation_requise" ? order.etape : undefined;
-  const failed = order?.statut === "echec" || (error !== null && !order);
+  const step = pendingStep(purchase);
   const done = order?.statut === "commandee";
-  const atDelivery = pause === "livraison" && !deliveryDone;
-  const atPayment = pause === "paiement" && !paymentDone;
-  const pastCart = deliveryDone || pause !== undefined || paymentDone || done;
-  const pastDelivery = (deliveryDone && pause === "paiement") || paymentDone || done;
-
-  const steps: { label: string; state: StepState }[] = [
-    { label: "Page produit, panier, commande", state: pastCart ? "done" : "active" },
-    {
-      label: "Livraison",
-      state: pastDelivery ? "done" : atDelivery ? "waiting" : deliveryDone ? "active" : "todo",
-    },
-    { label: "Paiement", state: done ? "done" : atPayment ? "waiting" : paymentDone ? "active" : "todo" },
-  ];
-
-  const send = async (choice?: string) => {
-    if (!order) return;
-    setSending(true);
-    setError(null);
-    try {
-      const next = await api.confirmOrder(order.orderId, choice);
-      if (choice) setDeliveryDone(true);
-      else setPaymentDone(true);
-      setOrder(next);
-    } catch (e) {
-      setError(errMsg(e));
-    } finally {
-      setSending(false);
-    }
+  const failed = order?.statut === "echec" || (error !== null && !order);
+  const etape = order?.statut === "confirmation_requise" ? order.etape : undefined;
+  const reached = (e: "livraison" | "paiement" | "banque") => {
+    const order_ = ["livraison", "paiement", "banque"];
+    const now = etape ? order_.indexOf(etape) : -1;
+    return now > order_.indexOf(e);
   };
 
+  const cart: StepState = purchase.deliveryDone || etape || done ? "done" : "active";
+  const delivery: StepState =
+    step === "livraison" ? "waiting" : reached("livraison") || purchase.paymentDone || done ? "done" : purchase.deliveryDone ? "active" : "todo";
+  const payment: StepState =
+    step === "paiement" || step === "banque"
+      ? "waiting"
+      : done
+        ? "done"
+        : purchase.paymentDone
+          ? "active"
+          : "todo";
+  const steps: { label: string; state: StepState }[] = [
+    { label: "Page produit, panier, commande", state: cart },
+    { label: "Livraison", state: delivery },
+    { label: step === "banque" ? "Validation bancaire" : "Paiement", state: payment },
+  ];
+
   const options = order?.livraisons ?? [];
+  const terminal = isTerminal(purchase) || failed;
 
   return (
     <div className="screen">
@@ -107,6 +69,7 @@ export function Checkout({
             </div>
             <h2>Commande validée</h2>
             {order?.message && <p>{order.message}</p>}
+            <p>Tu vas recevoir l'e-mail de confirmation de {product.marque}.</p>
           </div>
         ) : failed ? (
           <div className="status">
@@ -125,7 +88,7 @@ export function Checkout({
               ))}
             </ol>
 
-            {atDelivery && (
+            {step === "livraison" && (
               <fieldset className="delivery">
                 <legend>Choisis ta livraison</legend>
                 {options.map((o) => (
@@ -147,7 +110,7 @@ export function Checkout({
               </fieldset>
             )}
 
-            {atPayment && (
+            {step === "paiement" && (
               <div className="pay-recap">
                 {order?.message && <p>{order.message}</p>}
                 {order?.total && (
@@ -159,12 +122,23 @@ export function Checkout({
               </div>
             )}
 
-            {!atDelivery && !atPayment && order?.message && <p className="checkout-msg">{order.message}</p>}
+            {step === "banque" && (
+              <div className="pay-recap bank">
+                <BankIcon />
+                <p>
+                  Ta banque demande de confirmer le paiement. Valide-le dans ton application
+                  bancaire, puis reviens ici.
+                </p>
+              </div>
+            )}
+
+            {!step && order?.message && <p className="checkout-msg">{order.message}</p>}
+            {!step && <p className="checkout-msg">L'agent travaille dans un onglet en arrière-plan : tu peux continuer sur Pinterest.</p>}
             {error && <p className="error">{error}</p>}
           </>
         )}
 
-        {order?.agentViewUrl && !done && (
+        {order?.agentViewUrl && !terminal && (
           <a className="link-btn agent-link" href={order.agentViewUrl} target="_blank" rel="noreferrer">
             Voir l'agent en direct ↗
           </a>
@@ -172,22 +146,30 @@ export function Checkout({
       </div>
 
       <footer className="actions-bar">
-        {atDelivery ? (
+        {step === "livraison" ? (
           <button
             type="button"
             className="btn primary"
             disabled={!livraison || sending}
-            onClick={() => void send(livraison!)}
+            onClick={() => void answer(livraison!)}
           >
             {sending ? <Spinner light /> : "Continuer"}
           </button>
-        ) : atPayment ? (
-          <button type="button" className="btn primary" disabled={sending} onClick={() => void send()}>
+        ) : step === "paiement" ? (
+          <button type="button" className="btn primary" disabled={sending} onClick={() => void answer()}>
             {sending ? <Spinner light /> : `Confirmer le paiement${order?.total ? ` · ${order.total}` : ""}`}
           </button>
+        ) : step === "banque" ? (
+          <button type="button" className="btn primary" disabled={sending} onClick={() => void answer()}>
+            {sending ? <Spinner light /> : "J'ai validé dans mon appli"}
+          </button>
+        ) : terminal ? (
+          <button type="button" className="btn secondary" onClick={clearPurchase}>
+            Retour aux résultats
+          </button>
         ) : (
-          <button type="button" className="btn secondary" onClick={onBack}>
-            {done || failed ? "Retour aux résultats" : "Retour (l'agent continue)"}
+          <button type="button" className="btn secondary" onClick={hidePurchase}>
+            Masquer · l'agent continue
           </button>
         )}
       </footer>
@@ -195,9 +177,46 @@ export function Checkout({
   );
 }
 
+/** Bandeau compact quand l'écran d'achat est masqué. */
+export function PurchaseBanner({ purchase, onShow }: { purchase: Purchase; onShow: () => void }) {
+  const step = pendingStep(purchase);
+  const done = purchase.order?.statut === "commandee";
+  const failed = purchase.order?.statut === "echec";
+  const label = done
+    ? "Commande validée"
+    : failed
+      ? "Commande interrompue"
+      : step === "livraison"
+        ? "Choisis ta livraison"
+        : step === "paiement"
+          ? "Confirme le paiement"
+          : step === "banque"
+            ? "Valide dans ton appli bancaire"
+            : "Achat en cours…";
+  return (
+    <button type="button" className={`purchase-banner${step ? " attention" : ""}`} onClick={onShow}>
+      {!step && !done && !failed ? <Spinner /> : <span className="banner-dot" aria-hidden="true" />}
+      <span className="banner-text">
+        <b>{label}</b>
+        <small>
+          {purchase.product.marque} · {purchase.product.nom}
+        </small>
+      </span>
+      <span className="banner-cta">Voir</span>
+    </button>
+  );
+}
+
 const CheckIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
     strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M5 12l5 5L20 7" />
+  </svg>
+);
+const BankIcon = () => (
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="6" y="2" width="12" height="20" rx="2.5" />
+    <path d="M10 18h4M9.5 10.5l2 2 3.5-4" />
   </svg>
 );

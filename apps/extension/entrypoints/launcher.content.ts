@@ -47,6 +47,12 @@ const CSS = `
   display: flex; align-items: center; justify-content: center; transition: background .15s ease;
 }
 .logo:hover { background: #5C1420; }
+.logo { position: relative; }
+.dock.busy .logo::after {
+  content: ""; position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%;
+  background: #fff; box-shadow: 0 0 0 2px #7A1F2B; animation: buyfit-pulse 1.2s ease-in-out infinite;
+}
+@keyframes buyfit-pulse { 50% { opacity: .35; transform: scale(.8); } }
 .grip:focus-visible, .logo:focus-visible { outline: 2px solid #111; outline-offset: -2px; }
 .panel {
   position: fixed; z-index: 2147483646; width: ${PANEL_W}px; border-radius: 14px; overflow: hidden;
@@ -161,11 +167,17 @@ export default defineContentScript({
     window.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && open) setOpen(false);
     });
-    // Bouton « fermer » du panneau (dans l'iframe).
+    // Messages du panneau (iframe) : fermer ; achat qui demande l'attention ; agent au travail.
     window.addEventListener("message", (e) => {
-      if (iframe && e.source === iframe.contentWindow && e.data?.type === "buyfit:close") {
+      if (!iframe || e.source !== iframe.contentWindow) return;
+      const type = e.data?.type;
+      if (type === "buyfit:close") {
         setOpen(false);
         bubble.focus();
+      } else if (type === "buyfit:attention") {
+        setOpen(true);
+      } else if (type === "buyfit:busy") {
+        dock.classList.toggle("busy", e.data.on === true);
       }
     });
     // Sélection d'une pièce à l'écran : le panneau (iframe ou side panel) la demande,

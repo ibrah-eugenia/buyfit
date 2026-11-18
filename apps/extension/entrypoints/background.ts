@@ -31,6 +31,21 @@ export default defineBackground(() => {
 
   void setupOpening();
 
+  // Notifications d'achat (lib/purchase.ts) : id « buyfit-order|<tabId>|<ts> ».
+  browser.notifications?.onClicked.addListener((id) => {
+    if (!id.startsWith("buyfit-order|")) return;
+    void browser.notifications.clear(id);
+    const tabId = Number(id.split("|")[1]);
+    if (!Number.isInteger(tabId)) return;
+    void browser.tabs
+      .update(tabId, { active: true })
+      .then((tab) => {
+        if (tab?.windowId !== undefined) void browser.windows.update(tab.windowId, { focused: true });
+        return browser.tabs.sendMessage(tabId, { type: "buyfit:open-launcher" });
+      })
+      .catch(() => {});
+  });
+
   browser.contextMenus.onClicked.addListener((info, tab) => {
     if (info.menuItemId !== MENU_ID || !info.srcUrl || tab?.id === undefined) return;
     // Sur Pinterest : le panneau du logo flottant s'ouvre sur la page.

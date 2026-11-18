@@ -1349,3 +1349,60 @@ a.see {
 .status.success h2 {
   margin: 0;
 }
+
+
+/* ---------- Achat en arrière-plan ---------- */
+.purchase-banner {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--linen);
+  text-align: left;
+  cursor: pointer;
+}
+.purchase-banner.attention {
+  background: var(--blush);
+}
+.banner-dot {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--brand);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.banner-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.banner-text b {
+  font-size: 13px;
+}
+.banner-text small {
+  font-size: 12px;
+  color: var(--grey);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.banner-cta {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brand);
+}
+.pay-recap.bank {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  color: var(--brand);
+}
+.pay-recap.bank p {
+  color: var(--ink);
+  line-height: 1.45;
+}

@@ -7,6 +7,8 @@ import { cropToDataUrl, type NormRect } from "@/lib/crop";
 import { getPinPreview } from "@/lib/link-preview";
 import type { PagePreview, SelectionMessage, StartSelectMessage } from "@/lib/messages";
 import { normalizePinUrl } from "@/lib/pin-url";
+import { showPurchase, usePurchase } from "@/lib/purchase";
+import { Checkout, PurchaseBanner } from "./Checkout";
 import { PieceSelector } from "./PieceSelector";
 import { Results, type SearchState } from "./Results";
 import { Spinner } from "./Spinner";
@@ -54,6 +56,19 @@ const flowOf = (pinUrl: string): Flow => {
  * Zara / Mango / Uniqlo démarre seule et s'affiche sur l'écran de résultats.
  */
 export function Home({ userId }: { userId: string }) {
+  const purchase = usePurchase();
+  // Achat en cours : écran d'achat par-dessus tout (il survit au changement d'épingle),
+  // ou bandeau compact s'il est masqué.
+  if (purchase && !purchase.hidden) return <Checkout purchase={purchase} />;
+  return (
+    <>
+      {purchase && <PurchaseBanner purchase={purchase} onShow={showPurchase} />}
+      <PinHome userId={userId} />
+    </>
+  );
+}
+
+function PinHome({ userId }: { userId: string }) {
   const [pinUrl, setPinUrl] = useState<string | null>(null);
   const [size, setSize] = useState<string | null>(null);
 
