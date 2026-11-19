@@ -43,7 +43,7 @@ const memOrders = new Map<string, OrderRecord>();
 
 // ---------- real ----------
 let client: SupabaseClient | null = null;
-function db(): SupabaseClient {
+export function db(): SupabaseClient {
   client ??= createClient(config.SUPABASE_URL!, config.SUPABASE_SERVICE_ROLE_KEY!, {
     auth: { persistSession: false },
   });

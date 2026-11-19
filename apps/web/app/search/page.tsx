@@ -262,7 +262,7 @@ function SearchView() {
                 <ResultCard
                   key={r.id}
                   result={r}
-                  avatarUrl={profile?.photoCorpsUrl}
+                  avatarUrl={profile?.mannequinUrl}
                   budgetMax={profile?.budgetMax}
                 />
               ))}

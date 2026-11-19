@@ -2,7 +2,7 @@
  * Types et schémas propres au site web.
  *
  * Ils ÉTENDENT le contrat partagé `@buyfit/shared` (géré par Ibrahim) avec ce que l'équipe a validé
- * pour le site et qui n'existe pas encore dans le contrat : genre, deux photos, poids, morphologie,
+ * pour le site et qui n'existe pas encore dans le contrat : genre, mannequin, poids, morphologie,
  * contact, adresse, daltonisme, panier, livraison domicile / point relais, commande en invité,
  * recherche texte. La proposition de changements est dans `apps/web/PROPOSITION-shared.md`.
  */
@@ -79,8 +79,8 @@ export type Genre = z.infer<typeof GenreSchema>;
 export const GenreStepSchema = z.object({ genre: GenreSchema });
 
 export const PhotosStepSchema = z.object({
-  photoCorpsUrl: z.string().min(1, "Ajoute une photo en pied"),
-  photoTeteUrl: z.string().min(1, "Ajoute une photo de ta tête de profil"),
+  photoCorpsUrl: z.string().optional(),
+  mannequinUrl: z.string().min(1, "Crée ton mannequin"),
 });
 export type PhotosStep = z.infer<typeof PhotosStepSchema>;
 
@@ -253,14 +253,15 @@ export const CompteMarchandWebSchema = CompteMarchandSchema.extend({
 export type CompteMarchandWeb = z.infer<typeof CompteMarchandWebSchema>;
 
 /**
- * Profil complet côté web. Reprend `UserProfile` (sauf `photos`, remplacé par deux photos
- * nommées) et ajoute les champs validés par l'équipe.
+ * Profil complet côté web. Reprend `UserProfile` (sauf `photos`, remplacé par les photos nommées et le mannequin
+ * validé) et ajoute les champs validés par l'équipe.
  */
 export const WebProfileSchema = z.object({
   id: z.string().min(1),
   genre: GenreSchema.optional(),
   photoCorpsUrl: z.string().optional(),
   photoTeteUrl: z.string().optional(),
+  mannequinUrl: z.string().optional(),
   taille: TaillesSchema,
   mensurations: MensurationsWebSchema.partial(),
   poidsKg: z.number().optional(),

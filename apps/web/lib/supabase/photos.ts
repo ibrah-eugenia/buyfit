@@ -30,6 +30,7 @@ const isAllowedMime = (t: string): t is (typeof PHOTO_MIME_TYPES)[number] =>
 export async function uploadUserPhoto(
   file: File,
   type: PhotoType = "pied",
+  mannequin = false,
 ): Promise<ActionResult<UserPhoto>> {
   if (!PhotoTypeSchema.safeParse(type).success)
     return { ok: false, error: "Type de photo invalide." };
@@ -45,7 +46,7 @@ export async function uploadUserPhoto(
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Connecte-toi d'abord." };
 
-  const path = `${user.id}/${crypto.randomUUID()}.${EXTENSIONS[file.type]}`;
+  const path = `${user.id}/${mannequin ? "mannequin/" : ""}${crypto.randomUUID()}.${EXTENSIONS[file.type]}`;
   const { error: uploadError } = await supabase.storage
     .from(BUCKETS.userPhotos)
     .upload(path, file, { contentType: file.type, upsert: false });

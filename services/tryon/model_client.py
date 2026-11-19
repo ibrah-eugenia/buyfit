@@ -93,14 +93,14 @@ def download_image(url: str, allowed_hosts: set[str], *, local_origin: str | Non
 
 
 class HuggingFaceModel:
-    def __init__(self, space: str, token: str | None, allowed_hosts: set[str]):
+    def __init__(self, space: str, token: str | None, allowed_hosts: set[str], *, wait_seconds: int = MODEL_WAIT_SECONDS):
         # Gradio owns uploads/authentication; user URLs are downloaded separately.
         from gradio_client import Client
 
         self.space_host = space.replace("/", "-").lower() + ".hf.space"
         self.client = Client(
             space, token=token, download_files=False, verbose=False,
-            httpx_kwargs={"timeout": GRADIO_HTTP_TIMEOUT}, analytics_enabled=False,
+            httpx_kwargs={"timeout": httpx.Timeout(10, read=wait_seconds + 15, write=20)}, analytics_enabled=False,
         )
         self.allowed_hosts = allowed_hosts
         self.local_origin = None
@@ -132,26 +132,54 @@ class HuggingFaceModel:
                 {"background": paths[0], "layers": [], "composite": None},
                 paths[1], "a garment", True, False, 30, 42, api_name="/tryon",
             )
-            try:
-                result = job.result(timeout=MODEL_WAIT_SECONDS)
-            except FutureTimeout as exc:
-                try:
-                    job.cancel()
-                except Exception:
-                    pass  # Cancellation is best-effort; preserve the timeout response.
-                raise ModelTimeout("Délai Hugging Face dépassé.") from exc
-            output = result[0] if isinstance(result, (list, tuple)) else result
-            if isinstance(output, dict):
-                url = output.get("url")
-                # Some Gradio releases return only a remote FileData path.
-                if not url and isinstance(output.get("path"), str):
-                    url = self.client.src_prefixed + "file=" + quote(output["path"], safe="/")
-            else:
-                url = getattr(output, "url", output)
-            if not isinstance(url, str):
-                raise ModelError("Réponse Hugging Face inattendue.")
-            data, mime = download_image(url, {self.space_host}, local_origin=self.local_origin, headers=self.result_headers)
+            data, mime = self.read_job_image(job, MODEL_WAIT_SECONDS)
             return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
+
+    def read_job_image(self, job, timeout: int) -> tuple[bytes, str]:
+        try:
+            result = job.result(timeout=timeout)
+        except FutureTimeout as exc:
+            try:
+                job.cancel()
+            except Exception:
+                pass
+            raise ModelTimeout("Délai Hugging Face dépassé.") from exc
+        output = result[0] if isinstance(result, (list, tuple)) else result
+        if isinstance(output, dict):
+            url = output.get("url")
+            if not url and isinstance(output.get("path"), str):
+                url = self.client.src_prefixed + "file=" + quote(output["path"], safe="/")
+        else:
+            url = getattr(output, "url", output)
+        if not isinstance(url, str):
+            raise ModelError("Réponse Hugging Face inattendue.")
+        return download_image(url, {self.space_host}, local_origin=self.local_origin, headers=self.result_headers)
+
+
+class KontextModel(HuggingFaceModel):
+    SPACE = "black-forest-labs/FLUX.1-Kontext-Dev"
+    PROMPT = (
+        "Edit this photo into a realistic full-length studio photograph of the same person. "
+        "Preserve their face, body shape, proportions, skin tone, hair and clothing. "
+        "Turn their head, shoulders and hips directly towards the camera. Stand them upright, "
+        "both arms relaxed at their sides, hands empty, feet slightly apart. Remove phones, "
+        "mirrors, props and scenery. Use a seamless pure white background and floor with "
+        "soft even lighting. Center the entire person from head to shoes with a small margin."
+    )
+
+    def __init__(self, token: str | None):
+        super().__init__(self.SPACE, token, set(), wait_seconds=150)
+        self.space_host = "black-forest-labs-flux-1-kontext-dev.hf.space"
+
+    def avatar(self, photo: tuple[bytes, str]) -> tuple[bytes, str]:
+        from gradio_client import handle_file
+
+        data, mime = photo
+        with TemporaryDirectory(prefix="buyfit-avatar-") as directory:
+            path = Path(directory) / ("person." + {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[mime])
+            path.write_bytes(data)
+            job = self.client.submit(handle_file(str(path)), self.PROMPT, 42, False, 2.5, 28, api_name="/infer")
+            return self.read_job_image(job, 150)
 
 
 class LocalGradioModel(HuggingFaceModel):

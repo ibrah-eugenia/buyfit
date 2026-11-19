@@ -56,6 +56,15 @@ export function App() {
     <main>
       <header>
         <h1>BuyFit</h1>
+        {!USE_MOCK && (
+          <a
+            href={new URL("/settings", import.meta.env.WXT_WEB_URL).href}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Mon profil BuyFit
+          </a>
+        )}
         {USE_MOCK && <span className="badge">mock</span>}
       </header>
 

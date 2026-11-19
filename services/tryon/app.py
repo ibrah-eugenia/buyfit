@@ -9,17 +9,17 @@ from pathlib import Path
 from threading import Lock
 from time import monotonic
 
-from fastapi import FastAPI, Request, UploadFile, File
+from fastapi import FastAPI, Request, UploadFile, File, Form
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, FileResponse, RedirectResponse
+from fastapi.responses import JSONResponse, FileResponse, RedirectResponse, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from model_client import HuggingFaceModel, LocalGradioModel, ModelError, ModelTimeout, describe_failure, validate_image_url
+from model_client import KontextModel, download_image, HuggingFaceModel, LocalGradioModel, ModelError, ModelTimeout, describe_failure, validate_image_url
 from results import ResultStore
 
 
 MODE = os.getenv("TRYON_MODE", "local")
-HOSTS = {h.strip().lower() for h in os.getenv("TRYON_IMAGE_HOSTS", "i.pinimg.com").split(",") if h.strip()}
+HOSTS = {h.strip().lower() for h in os.getenv("TRYON_IMAGE_HOSTS", "i.pinimg.com,images.unsplash.com").split(",") if h.strip()}
 SPACE = os.getenv("HF_SPACE_ID", "yisol/IDM-VTON")
 lock = Lock()
 DIRECTORY = Path(__file__).resolve().parent
@@ -36,6 +36,7 @@ async def lifespan(app: FastAPI):
     # The receipt page remains available even if the generation engine is offline.
     # The engine is connected lazily during a generation, without an implicit fallback.
     app.state.model = None
+    app.state.avatar_model = None
     yield
 
 
@@ -61,8 +62,10 @@ class TryOnResult(BaseModel):
 @app.middleware("http")
 async def limit_body(request: Request, call_next):
     if request.method == "POST":
+        if request.url.path in {"/avatar", "/tryon/account"} and request.headers.get("X-BuyFit-Request") != "internal":
+            return JSONResponse({"error": "Appel réservé à l’API BuyFit."}, status_code=403)
         data = bytearray()
-        limit = 16 * 1024 * 1024 + 64 * 1024 if request.url.path == "/tryon/upload" else 16 * 1024
+        limit = 16 * 1024 * 1024 + 64 * 1024 if request.url.path in {"/tryon/upload", "/tryon/account", "/avatar"} else 16 * 1024
         async for chunk in request.stream():
             data.extend(chunk)
             if len(data) > limit:
@@ -211,3 +214,61 @@ def tryon_upload(
         return get_model(request).generate_images(person_image, garment_image)
 
     return run_generation(generate, request)
+
+@app.post("/avatar")
+def avatar(request: Request, person: UploadFile = File()):
+    """Normalize a standing photo using the official FLUX.1 Kontext Space."""
+    if MODE != "huggingface":
+        return JSONResponse({"error": "La création du mannequin nécessite TRYON_MODE=huggingface."}, status_code=503)
+    try:
+        photo = read_upload(person)
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+    finally:
+        person.file.close()
+    if not lock.acquire(blocking=False):
+        return JSONResponse({"error": "Une génération est en cours. Réessaie dans un instant."}, status_code=503)
+    try:
+        if request.app.state.avatar_model is None:
+            request.app.state.avatar_model = KontextModel(os.getenv("HF_TOKEN"))
+        data, mime = request.app.state.avatar_model.avatar(photo)
+        return Response(data, media_type=mime)
+    except Exception as exc:
+        failure = describe_failure(exc)
+        return JSONResponse({"error": str(failure)}, status_code=504 if isinstance(failure, ModelTimeout) else 502)
+    finally:
+        lock.release()
+
+
+@app.post("/tryon/account")
+def account_tryon(request: Request, person: UploadFile = File(), garment: UploadFile | None = File(None),
+                  garment_url: str | None = Form(None)):
+    """Private server-to-server path. The API supplies the account's approved mannequin."""
+    if MODE == "mock":
+        return JSONResponse({"error": "Active un moteur réel pour essayer ce vêtement."}, status_code=503)
+    try:
+        mannequin = read_upload(person)
+        if bool(garment) == bool(garment_url):
+            raise ValueError("Choisis un fichier ou une URL de vêtement.")
+        garment_image = read_upload(garment) if garment else None
+        if garment_url:
+            validate_image_url(garment_url, HOSTS)
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+    finally:
+        person.file.close()
+        if garment:
+            garment.file.close()
+    if not lock.acquire(blocking=False):
+        return JSONResponse({"error": "Un essayage est déjà en cours."}, status_code=503)
+    try:
+        if garment_image is None:
+            garment_image = download_image(garment_url, HOSTS)
+        image = get_model(request).generate_images(mannequin, garment_image)
+        header, encoded = image.split(",", 1)
+        return Response(base64.b64decode(encoded, validate=True), media_type=header[5:-7])
+    except Exception as exc:
+        failure = describe_failure(exc)
+        return JSONResponse({"error": str(failure)}, status_code=504 if isinstance(failure, ModelTimeout) else 502)
+    finally:
+        lock.release()

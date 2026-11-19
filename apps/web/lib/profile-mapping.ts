@@ -12,7 +12,7 @@ export const versEtape = {
   genre: (p: WebProfile): { genre?: Genre } => ({ genre: p.genre }),
   photos: (p: WebProfile): Partial<PhotosStep> => ({
     photoCorpsUrl: p.photoCorpsUrl,
-    photoTeteUrl: p.photoTeteUrl,
+    mannequinUrl: p.mannequinUrl,
   }),
   corps: (p: WebProfile): Partial<CorpsStep> => ({
     mensurations: p.mensurations as CorpsStep["mensurations"],

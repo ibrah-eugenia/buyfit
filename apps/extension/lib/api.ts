@@ -1,5 +1,5 @@
 /**
- * Client de apps/api. L'extension ne parle QU'À apps/api : aucune clé tierce ici.
+ * Client BuyFit. Le site transmet la session des appels photo et recherche à apps/api.
  * WXT_USE_MOCK_API=true → réponses simulées (dev sans back-end).
  */
 import {
@@ -25,12 +25,23 @@ async function request<S extends z.ZodType>(
   path: string,
   schema: S,
   body?: unknown,
+  account = false,
 ): Promise<z.infer<S>> {
-  const res = await fetch(new URL(path, BASE_URL), {
-    method,
-    headers: body ? { "Content-Type": "application/json" } : {},
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  const res = await fetch(
+    new URL(
+      account ? "/api/fitting" + path : path,
+      account ? import.meta.env.WXT_WEB_URL : BASE_URL,
+    ),
+    {
+      method,
+      credentials: account ? "include" : "omit",
+      headers: {
+        ...(body ? { "Content-Type": "application/json" } : {}),
+        ...(account ? { "X-BuyFit-Request": "fitting" } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    },
+  );
   const json: unknown = await res.json().catch(() => null);
   if (!res.ok) {
     const err = ApiErrorSchema.safeParse(json);
@@ -48,8 +59,22 @@ export interface BuyFitApi {
 }
 
 const httpApi: BuyFitApi = {
-  capture: (req) => request("POST", "/capture", CaptureResponseSchema, req),
-  tryOn: (req) => request("POST", "/tryon", TryOnResultSchema, req),
+  capture: async (req) => {
+    // Keep unauthenticated demo capture usable; fitting always needs an account.
+    const response = await fetch(new URL("/api/fitting/capture", import.meta.env.WXT_WEB_URL), {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", "X-BuyFit-Request": "fitting" },
+      body: JSON.stringify(req),
+    }).catch(() => null);
+    if (!response || response.status === 401)
+      return request("POST", "/capture", CaptureResponseSchema, req);
+    const json: unknown = await response.json();
+    if (!response.ok)
+      throw new Error(ApiErrorSchema.safeParse(json).data?.error ?? "Recherche indisponible.");
+    return CaptureResponseSchema.parse(json);
+  },
+  tryOn: (req) => request("POST", "/tryon", TryOnResultSchema, req, true),
   order: (req) => request("POST", "/order", OrderStatusSchema, req),
   getOrder: (id) => request("GET", `/order/${encodeURIComponent(id)}`, OrderStatusSchema),
   confirmOrder: (id) =>

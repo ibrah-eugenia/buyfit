@@ -104,7 +104,12 @@ function Settings() {
             <StepGenre {...commun} initial={versEtape.genre(p)} onSubmit={enregistrer} />
           )}
           {section === "photos" && (
-            <StepPhotos {...commun} initial={versEtape.photos(p)} onSubmit={enregistrer} />
+            <StepPhotos
+              key={p.mannequinUrl}
+              {...commun}
+              initial={versEtape.photos(p)}
+              onSubmit={enregistrer}
+            />
           )}
           {section === "corps" && (
             <StepCorps
