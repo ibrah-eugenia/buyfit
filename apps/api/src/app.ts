@@ -1,4 +1,5 @@
 import { Hono, type Context } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import type { z } from "zod";
@@ -17,6 +18,7 @@ import {
   TryOnApiRequestSchema,
   TryOnResultSchema,
   sizeEquivalents,
+  UserProfileSchema,
   type ApiError,
   type OrderStatus,
 } from "@buyfit/shared";
@@ -38,6 +40,14 @@ import {
   updateOrder,
   type OrderRecord,
 } from "./modules/supabase.js";
+import {
+  accountTryOn,
+  checkPhoto,
+  fittingUser,
+  MAX_IMAGE,
+  modelImage,
+} from "./modules/account-fitting.js";
+import { db } from "./modules/supabase.js";
 import { tryOn } from "./modules/tryon.js";
 import { searchStores } from "./modules/search.js";
 import { identifyItem } from "./modules/vision.js";
@@ -113,7 +123,7 @@ app.use(
           ? origin
           : null,
     allowMethods: ["GET", "POST", "OPTIONS"],
-    allowHeaders: ["Content-Type"],
+    allowHeaders: ["Content-Type", "Authorization"],
   }),
 );
 
@@ -132,7 +142,15 @@ app.get("/health", (c) => c.json({ ok: true, mocks: config.mocks }));
 // POST /capture → ProductMatch[]
 app.post("/capture", async (c) => {
   const req = await body(c, CaptureRequestSchema);
-  const profile = await requireProfile(req.userId);
+  let profile;
+  if (c.req.header("Authorization")) {
+    const userId = await fittingUser(c.req.header("Authorization"));
+    const { data, error } = await db().rpc("api_get_user_profile", { p_user_id: userId });
+    if (error || !data) throw new HttpError(404, "Profil BuyFit introuvable.");
+    profile = UserProfileSchema.parse({ ...data, photos: [] });
+  } else {
+    profile = await requireProfile(req.userId);
+  }
   const budgetMax = req.budgetMax ?? profile.budgetMax;
   const matches = await call("brightdata", () =>
     findMatches(req.capture, { ...profile, budgetMax }, req.requetesSecours),
@@ -156,7 +174,7 @@ app.post("/serp", async (c) => {
   return c.json(SerpResponseSchema.parse(res));
 });
 
-// POST /search → { resultats, filtreIA } (Zara / Mango / Uniqlo + filtre IA de similarité)
+// POST /search → { resultats, filtreIA } (Zara / Uniqlo + filtre IA de similarité)
 app.post("/search", async (c) => {
   const req = await body(c, SearchRequestSchema);
   await requireProfile(req.userId);
@@ -164,8 +182,41 @@ app.post("/search", async (c) => {
   return c.json(SearchResponseSchema.parse(res));
 });
 
+const fittingLimit = bodyLimit({
+  maxSize: MAX_IMAGE + 65536,
+  onError: (c) => c.json({ error: "La photo dépasse 8 Mo." }, 413),
+});
+
+app.post("/avatar", fittingLimit, async (c) => {
+  await fittingUser(c.req.header("Authorization"));
+  const input = await c.req.formData().catch(() => {
+    throw new HttpError(400, "Photo manquante.");
+  });
+  const form = new FormData();
+  form.set("person", checkPhoto(input.get("person")), "person");
+  const image = await modelImage("/avatar", form);
+  return new Response(image, {
+    headers: { "Content-Type": image.type, "Cache-Control": "private, no-store" },
+  });
+});
+
 // POST /tryon → TryOnResult (proxy vers services/tryon)
-app.post("/tryon", async (c) => {
+app.post("/tryon", fittingLimit, async (c) => {
+  const auth = c.req.header("Authorization");
+  if (auth || !config.mocks.supabase) {
+    const userId = await fittingUser(auth);
+    if (c.req.header("Content-Type")?.startsWith("multipart/form-data")) {
+      const form = await c.req.formData().catch(() => {
+        throw new HttpError(400, "Vêtement manquant.");
+      });
+      return c.json(await accountTryOn(userId, checkPhoto(form.get("garment"))));
+    }
+    const req = await body(c, TryOnApiRequestSchema.omit({ userId: true }));
+    if (!req.userPhotoUrl) return c.json(await accountTryOn(userId, req.garmentImageUrl));
+    return c.json(
+      await tryOn({ userPhotoUrl: req.userPhotoUrl, garmentImageUrl: req.garmentImageUrl }),
+    );
+  }
   const req = await body(c, TryOnApiRequestSchema);
   let userPhotoUrl = req.userPhotoUrl;
   if (!userPhotoUrl) {

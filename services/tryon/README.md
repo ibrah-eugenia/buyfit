@@ -245,3 +245,34 @@ Renvoie `200 { "ok": true }` (utile pour vérifier que le modèle est chargé).
 - Tant que `TRYON_SERVICE_URL` est vide, l'API utilise un mock (renvoie l'image du vêtement).
 - Mettre les dépendances (requirements.txt / pyproject) et un `Dockerfile` dans ce dossier.
 - Si le service est en Python, il est exclu du lint/typecheck TS (déjà ignoré dans la config).
+
+## Mannequin de compte et essayages
+
+Dans le site BuyFit, l’étape Photos de l’inscription et des réglages accepte une photo en pied.
+**Générer mon mannequin** l’envoie à FLUX.1 Kontext. La validation sauvegarde le résultat dans
+le bucket privé existant `user-photos` sous `<user_id>/mannequin/`, avec une ligne de type
+`pied` dans `user_photos`. Les anciennes photos en pied restent disponibles comme source.
+Les deux tables et les buckets privés proviennent des migrations Supabase existantes.
+
+Pour lancer la démo depuis la racine du projet, avec les variables du projet Supabase déjà créé :
+
+1. Dans le terminal Python avec `HF_TOKEN` exporté, redémarrer le service en
+   `TRYON_MODE=huggingface` (commande de la section « Activer Hugging Face »). FLUX et
+   IDM-VTON partagent ce token. `HF_SPACE_ID` reste celui d’IDM-VTON.
+2. Dans le `.env` racine, configurer `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
+   `TRYON_SERVICE_URL=http://127.0.0.1:8000` et `WEB_URL=http://localhost:3000`.
+   Lancer `pnpm dev:api`. Dans `apps/web/.env.local`, utiliser les clés publiques du même
+   projet et `API_URL=http://localhost:8787`, puis lancer `pnpm --filter @buyfit/web dev`.
+3. Se connecter sur le site et valider un mannequin. Sur une carte produit web, **Sur moi**
+   lance IDM-VTON. Le catalogue fictif demande une vraie photo du vêtement. Pour le panneau
+   Chrome, lancer `pnpm build:ext` et recharger l’extension produit. Utiliser la même origine
+   web et le même profil Chrome que pour la connexion. Le mode extension mock est réservé aux
+   réponses simulées. Pour les images produit distantes, autoriser leurs hôtes HTTPS exacts dans
+   `TRYON_IMAGE_HOSTS` côté Python (par exemple `i.pinimg.com,images.unsplash.com` pour la démo).
+
+Le serveur vérifie le token Supabase avant de résoudre le mannequin du compte. Il transmet
+l’image à IDM-VTON et stocke le rendu dans `tryon-results`. L’historique utilise une URL signée
+renouvelée à la lecture. Pour un vêtement importé, son identifiant dans l’historique est un
+URN UUID. Si le quota Hugging Face est épuisé, une nouvelle tentative est possible avec la
+même photo. En hébergement, régler les URL sur les origines déployées et prévoir un délai
+HTTP d’au moins 215 secondes entre le site et l’API.

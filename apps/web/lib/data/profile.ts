@@ -48,14 +48,22 @@ function versComptes(comptes: MerchantAccountView[]): CompteMarchandWeb[] {
 function dernierePhoto(photos: UserPhoto[], type: PhotoType): UserPhoto | undefined {
   return photos
     .filter((p) => p.type === type && p.url)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))[0];
 }
+
+const isMannequin = (p: UserPhoto) =>
+  p.type === "pied" && p.storagePath.split("/")[1] === "mannequin";
 
 function versWebProfile(p: Profile, photos: UserPhoto[], comptes: MerchantAccountView[]) {
   const profil: WebProfile = {
     id: p.userId,
     genre: p.genre ?? undefined,
-    photoCorpsUrl: dernierePhoto(photos, "pied")?.url ?? undefined,
+    mannequinUrl: dernierePhoto(photos.filter(isMannequin), "pied")?.url ?? undefined,
+    photoCorpsUrl:
+      dernierePhoto(
+        photos.filter((photo) => !isMannequin(photo)),
+        "pied",
+      )?.url ?? undefined,
     photoTeteUrl: dernierePhoto(photos, "face")?.url ?? undefined,
     taille: p.taille,
     mensurations: p.mensurations,
@@ -83,19 +91,34 @@ export async function getProfile(_userId: string): Promise<WebProfile> {
 }
 
 /** Data URL produite par PhotoDrop → fichier JPEG envoyé au bucket privé. */
-async function envoyerPhoto(dataUrl: string, type: PhotoType, anciennes: UserPhoto[]) {
+async function envoyerPhoto(
+  dataUrl: string,
+  type: PhotoType,
+  anciennes: UserPhoto[],
+  mannequin = false,
+) {
   const blob = await (await fetch(dataUrl)).blob();
   const fichier = new File([blob], `${type}.jpg`, { type: blob.type || "image/jpeg" });
-  donnees(await uploadUserPhoto(fichier, type));
+  donnees(await uploadUserPhoto(fichier, type, mannequin));
   // Une seule photo par type : on supprime les précédentes (minimisation des données).
-  await Promise.all(anciennes.filter((p) => p.type === type).map((p) => deleteUserPhoto(p.id)));
+  await Promise.all(
+    anciennes
+      .filter((p) => p.type === type && isMannequin(p) === mannequin)
+      .map((p) => deleteUserPhoto(p.id)),
+  );
 }
 
 const estNouvellePhoto = (v: string | undefined): v is string => !!v?.startsWith("data:");
 
 export async function saveProfile(userId: string, patch: Partial<WebProfile>): Promise<WebProfile> {
-  if (estNouvellePhoto(patch.photoCorpsUrl) || estNouvellePhoto(patch.photoTeteUrl)) {
+  if (
+    estNouvellePhoto(patch.mannequinUrl) ||
+    estNouvellePhoto(patch.photoCorpsUrl) ||
+    estNouvellePhoto(patch.photoTeteUrl)
+  ) {
     const anciennes = donnees(await listUserPhotos());
+    if (estNouvellePhoto(patch.mannequinUrl))
+      await envoyerPhoto(patch.mannequinUrl, "pied", anciennes, true);
     if (estNouvellePhoto(patch.photoCorpsUrl))
       await envoyerPhoto(patch.photoCorpsUrl, "pied", anciennes);
     if (estNouvellePhoto(patch.photoTeteUrl))

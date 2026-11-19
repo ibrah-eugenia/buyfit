@@ -69,9 +69,6 @@ export async function searchProducts(
       ...produit,
       score: Math.min(Number((base + bonus).toFixed(2)), 0.99),
       tailleConseillee: tailleConseillee(p, profil),
-      essayage: profil?.photoCorpsUrl
-        ? { resultImageUrl: "https://example.com/buyfit/essayage.jpg", latencyMs: 2400 }
-        : undefined,
     };
     return resultat;
   })

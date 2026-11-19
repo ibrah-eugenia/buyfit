@@ -1,12 +1,13 @@
 "use client";
 
 import { Info, ShoppingBag, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { useCart } from "@/components/app-providers";
 import { SizeSelect } from "@/components/cart/size-select";
 import { ProductImage } from "@/components/product-image";
 import { Button } from "@/components/ui/button";
+import { tryOnGarment } from "@/lib/data/fitting";
 import type { SearchResult } from "@/lib/types";
 import { cn, formatPrix } from "@/lib/utils";
 
@@ -21,11 +22,36 @@ export function ResultCard({
 }) {
   const { add } = useCart();
   const [taille, setTaille] = useState(result.tailleConseillee);
-  const [vue, setVue] = useState<"produit" | "essayage">(
-    result.essayage && avatarUrl ? "essayage" : "produit",
-  );
+  const [vue, setVue] = useState<"produit" | "essayage">("produit");
+  const [image, setImage] = useState<string>();
+  const [pending, setPending] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const pourcentage = Math.round(result.score * 100);
-  const peutEssayer = !!result.essayage && !!avatarUrl;
+  // The web demo catalogue has placeholder URLs; let users supply the real garment.
+  const needsFile = new URL(result.imageUrl).hostname === "example.com";
+
+  async function showFitting(file?: File) {
+    if (pending) return;
+    if (!avatarUrl) return toast.error("Crée ton mannequin dans Réglages → Photos.");
+    if (image) {
+      setVue("essayage");
+      return;
+    }
+    if (!file && needsFile) {
+      fileInput.current?.click();
+      return;
+    }
+    if (file && file.size > 8 * 1024 * 1024) return toast.error("La photo dépasse 8 Mo.");
+    setPending(true);
+    try {
+      setImage(await tryOnGarment(file ?? result.imageUrl));
+      setVue("essayage");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Essayage impossible.");
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
     <article
@@ -33,11 +59,10 @@ export function ResultCard({
       aria-labelledby={`titre-${result.id}`}
     >
       <div className="relative aspect-[4/5] bg-linen">
-        {vue === "essayage" && avatarUrl ? (
+        {vue === "essayage" && image ? (
           <>
-            {/* Essayage simulé : la photo de l'avatar. Le vrai rendu viendra du service try-on de Félix. */}
             <img
-              src={avatarUrl}
+              src={image}
               alt={`Essayage de ${result.nom} sur ton avatar`}
               className="size-full object-cover"
             />
@@ -54,10 +79,23 @@ export function ResultCard({
             className="size-full"
           />
         )}
+        <input
+          ref={fileInput}
+          type="file"
+          className="sr-only"
+          tabIndex={-1}
+          aria-label="Photo du vêtement à essayer"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) void showFitting(file);
+          }}
+        />
         <span className="absolute top-3 left-3 rounded-full bg-ink px-2.5 py-1 text-caption font-bold text-white">
           {pourcentage} % ressemblant
         </span>
-        {peutEssayer && (
+        {
           <div
             className="absolute top-3 right-3 flex rounded-full bg-white/95 p-0.5 text-caption font-semibold"
             role="group"
@@ -67,18 +105,19 @@ export function ResultCard({
               <button
                 key={v}
                 type="button"
-                onClick={() => setVue(v)}
+                disabled={pending}
+                onClick={() => (v === "produit" ? setVue(v) : void showFitting())}
                 aria-pressed={vue === v}
                 className={cn(
                   "rounded-full px-2.5 py-1 transition-colors",
                   vue === v ? "bg-brand text-white" : "text-grey hover:text-ink",
                 )}
               >
-                {v === "essayage" ? "Sur moi" : "Produit"}
+                {v === "essayage" ? (pending ? "Essayage…" : "Sur moi") : "Produit"}
               </button>
             ))}
           </div>
-        )}
+        }
       </div>
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex flex-col gap-1">

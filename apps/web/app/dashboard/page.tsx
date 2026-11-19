@@ -250,9 +250,9 @@ function Dashboard() {
                         className="flex flex-col overflow-hidden rounded-2xl border border-line-soft"
                       >
                         <div className="relative aspect-[3/4] bg-linen">
-                          {e.statut === "pret" && profile?.photoCorpsUrl ? (
+                          {e.statut === "pret" && e.resultImageUrl ? (
                             <img
-                              src={profile.photoCorpsUrl}
+                              src={e.resultImageUrl}
                               alt={`Essayage : ${e.produit}`}
                               className="size-full object-cover"
                             />
