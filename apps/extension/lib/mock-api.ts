@@ -40,7 +40,15 @@ const PRODUCTS: ProductMatch[] = [
   },
 ];
 
-const orders = new Map<string, { startedAt: number; confirmedAt?: number }>();
+const orders = new Map<
+  string,
+  { startedAt: number; deliveryAt?: number; confirmedAt?: number; bankAt?: number; taille?: string }
+>();
+const LIVRAISONS = [
+  { id: "standard", label: "Livraison standard", prix: "Gratuit", delai: "3 à 5 jours ouvrés" },
+  { id: "express", label: "Livraison express", prix: "6,95 €", delai: "24 h" },
+  { id: "relais", label: "Point relais", prix: "2,95 €", delai: "2 à 4 jours ouvrés" },
+];
 
 function status(orderId: string): OrderStatus {
   const o = orders.get(orderId);
@@ -50,38 +58,106 @@ function status(orderId: string): OrderStatus {
     updatedAt: new Date().toISOString(),
   };
   if (!o) return { ...base, statut: "echec", message: "Commande inconnue" };
+  if (o.bankAt) {
+    return Date.now() - o.bankAt > 2500
+      ? { ...base, statut: "commandee", message: "Commande n° MOCK-1234" }
+      : { ...base, statut: "en_cours", message: "Vérification du paiement…" };
+  }
   if (o.confirmedAt) {
-    return Date.now() - o.confirmedAt > 3000
-      ? { ...base, statut: "commandee", message: "Commande mock validée (n° MOCK-1234)." }
+    return Date.now() - o.confirmedAt > 2500
+      ? {
+          ...base,
+          statut: "confirmation_requise",
+          etape: "banque",
+          message: "Valide le paiement dans ton application bancaire.",
+        }
       : { ...base, statut: "en_cours", message: "Validation du paiement…" };
+  }
+  if (o.deliveryAt) {
+    return Date.now() - o.deliveryAt > 3000
+      ? {
+          ...base,
+          statut: "confirmation_requise",
+          etape: "paiement",
+          message: "Veste croisée beige, taille L",
+          total: "75,90 €",
+        }
+      : { ...base, statut: "en_cours", message: "L'agent finalise la commande…" };
   }
   const t = Date.now() - o.startedAt;
   if (t < 2000) return { ...base, statut: "en_attente" };
-  if (t < 7000) return { ...base, statut: "en_cours", message: "L'agent remplit le panier…" };
-  return { ...base, statut: "confirmation_requise", message: "Panier prêt : confirme l'achat." };
+  // Simulations : XS = vérification anti-robot, XXL = rupture de stock.
+  if (o.taille === "XS" && t > 3500) {
+    return {
+      ...base,
+      statut: "echec",
+      motif: "site_bloque",
+      message: "Vérification anti-robot affichée par le site.",
+    };
+  }
+  if (o.taille === "XXL" && t > 3500) {
+    return {
+      ...base,
+      statut: "echec",
+      motif: "rupture",
+      message: "Taille XXL indisponible : « Rupture de stock » affichée sur la page produit.",
+    };
+  }
+  if (t < 6000)
+    return { ...base, statut: "en_cours", message: "L'agent ajoute l'article au panier…" };
+  return { ...base, statut: "confirmation_requise", etape: "livraison", livraisons: LIVRAISONS };
 }
 
 export const mockApi: BuyFitApi = {
-  async capture() {
+  async identify() {
+    await wait(900);
+    return {
+      nom: "Blazer croisé en laine à carreaux bleu",
+      requete: "blazer croisé laine carreaux bleu homme",
+      requetesSecours: ["blazer carreaux bleu homme", "blazer bleu"],
+      categorie: "veste",
+      couleur: "bleu",
+      matiere: "laine",
+      genre: "homme",
+    };
+  },
+  async serp(req) {
+    await wait(1200);
+    return { requete: req.requete, resultats: PRODUCTS };
+  },
+  async search() {
+    await wait(1800);
+    return {
+      filtreIA: true,
+      resultats: [
+        { ...PRODUCTS[0]!, score: 0.9 },
+        { ...PRODUCTS[1]!, score: 0.7 },
+        { ...PRODUCTS[2]!, marque: "Uniqlo", url: "https://www.uniqlo.com/fr/", score: 0.6 },
+      ],
+    };
+  },
+  async capture(req) {
     await wait(1500);
-    return PRODUCTS;
+    return req.budgetMax ? PRODUCTS.filter((p) => p.prix <= req.budgetMax!) : PRODUCTS;
   },
   async tryOn(req) {
     await wait(1500);
     return { resultImageUrl: req.garmentImageUrl, latencyMs: 1500 };
   },
-  async order() {
+  async order(req) {
     await wait(500);
     const id = crypto.randomUUID();
-    orders.set(id, { startedAt: Date.now() });
-    return status(id);
+    orders.set(id, { startedAt: Date.now(), taille: req.taille });
+    return { ...status(id), agentViewUrl: "https://platform.eu.hcompany.ai/agent-view/mock" };
   },
   async getOrder(id) {
     return status(id);
   },
-  async confirmOrder(id) {
+  async confirmOrder(id, livraison) {
     const o = orders.get(id);
-    if (o) o.confirmedAt = Date.now();
+    if (o && livraison) o.deliveryAt = Date.now();
+    else if (o?.confirmedAt) o.bankAt = Date.now();
+    else if (o) o.confirmedAt = Date.now();
     return status(id);
   },
 };

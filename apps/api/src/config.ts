@@ -20,6 +20,11 @@ const EnvSchema = z.object({
   /** Google Lens via Bright Data (recherche par image). Désactivé : renvoie no_local_parser (17/11/2026). */
   BRIGHTDATA_USE_LENS: bool,
 
+  /** Token Hugging Face (Inference Providers) pour identifier la pièce sélectionnée. */
+  HF_TOKEN: z.string().optional(),
+  /** Modèle de vision servi par les Inference Providers HF (format OpenAI chat + image). */
+  HF_VISION_MODEL: z.string().default("google/gemma-4-26B-A4B-it"),
+
   SUPABASE_URL: z.string().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
 
@@ -31,6 +36,7 @@ const EnvSchema = z.object({
   MOCK_HCOMPANY: bool,
   MOCK_TRYON: bool,
   MOCK_SUPABASE: bool,
+  MOCK_VISION: bool,
 });
 
 // Les variables vides ("FOO=") sont traitées comme absentes.
@@ -46,6 +52,7 @@ export const config = {
     brightdata: mock(env.MOCK_BRIGHTDATA, env.BRIGHTDATA_API_TOKEN),
     hcompany: mock(env.MOCK_HCOMPANY, env.HAI_API_KEY),
     tryon: mock(env.MOCK_TRYON, env.TRYON_SERVICE_URL),
+    vision: mock(env.MOCK_VISION, env.HF_TOKEN),
     supabase: mock(env.MOCK_SUPABASE, env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY),
   },
 } as const;

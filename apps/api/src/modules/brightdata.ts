@@ -24,13 +24,14 @@ import { HttpError } from "../errors.js";
 
 const BRIGHTDATA_REQUEST_URL = "https://api.brightdata.com/request";
 const MAX_RESULTS = 3;
-const MAX_BRAND_QUERIES = 2;
+const MAX_BRAND_QUERIES = 3;
 /** Recouvrement minimal entre titre Shopping et titre de la page marchand retrouvée. */
 const MIN_TITLE_OVERLAP = 0.5;
 
 export async function findMatches(
   capture: InspirationCapture,
   profile: UserProfile,
+  fallbackQueries: string[] = [],
 ): Promise<ProductMatch[]> {
   if (config.mocks.brightdata) return rank(mockResults(profile), profile);
 
@@ -47,30 +48,54 @@ export async function findMatches(
     candidates.push(...(await searchLens(capture.imageUrl).catch(() => [])));
   }
   if (query) {
-    const queries = [
-      query,
-      ...profile.marquesPreferees.slice(0, MAX_BRAND_QUERIES).map((m) => `${m} ${query}`),
-    ];
-    // Une requête qui échoue (ex. Google redirige vers une boutique de marque) n'arrête pas les autres.
-    const results = await Promise.allSettled(queries.map(searchShopping));
-    const ok = results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
-    if (!ok.length && results.every((r) => r.status === "rejected")) {
-      throw (results[0] as PromiseRejectedResult).reason;
-    }
-    candidates.push(...ok);
+    // 1. Requête principale, puis repli de plus en plus générique tant que Google ne renvoie rien.
+    const { used, items } = await searchWithFallback(
+      relaxQueries(query, fallbackQueries.map(cleanQuery)),
+    );
+    candidates.push(...items);
+    // 2. Même requête chez les marques / marchands de l'utilisateur. Un échec n'arrête pas les autres.
+    const brandQueries = userSites(profile)
+      .slice(0, MAX_BRAND_QUERIES)
+      .map((m) => `${m} ${used}`);
+    const results = await Promise.allSettled(brandQueries.map(searchShopping));
+    candidates.push(...results.flatMap((r) => (r.status === "fulfilled" ? r.value : [])));
   }
 
-  const top = rank(candidates, profile);
+  const top = rank(candidates, profile, query);
   return Promise.all(top.map(resolveMerchantUrl));
 }
 
 // ---------- classement ----------
 
-function rank(items: ProductMatch[], profile: UserProfile): ProductMatch[] {
+/** Sites renseignés par l'utilisateur : marques préférées + marchands où il a un compte. */
+function userSites(profile: UserProfile): string[] {
+  const names = [...profile.marquesPreferees, ...profile.comptesMarchands.map((m) => m.marchand)];
+  return [...new Map(names.map((n) => [brandKey(n), n])).values()];
+}
+
+/** Si au moins un résultat vient des sites de l'utilisateur, on ne garde que ceux-là. */
+function onUserSites(items: ProductMatch[], profile: UserProfile): ProductMatch[] {
+  const sites = new Set([
+    ...userSites(profile).map(brandKey),
+    ...profile.comptesMarchands.map((m) => brandKey(m.domaine)),
+  ]);
+  if (!sites.size) return items;
+  const mine = items.filter((p) => sites.has(brandKey(p.marque)));
+  return mine.length ? mine : items;
+}
+
+/** Poids de la pertinence titre ↔ requête (couleur, motif, matière…) dans le score final. */
+const RELEVANCE_WEIGHT = 0.3;
+/** Déguisements / costumes de fête : jamais un équivalent d'une tenue Pinterest. */
+const COSTUME_PARTY = /d[ée]guisement|opposuits|halloween|carnaval|cosplay/i;
+
+function rank(items: ProductMatch[], profile: UserProfile, query = ""): ProductMatch[] {
   const seen = new Set<string>();
-  return items
+  const inBudget = items
     .filter((p) => p.prix > 0 && p.prix <= profile.budgetMax)
     .filter((p) => !isMarketplace(p.marque))
+    .filter((p) => !COSTUME_PARTY.test(`${p.nom} ${p.marque}`));
+  return onUserSites(inBudget, profile)
     .filter((p) => {
       // Variantes taille/couleur : « Pull X | Vert / 5 » et « Pull X | Bleu / 6 » → un seul.
       const key = `${p.marque}|${p.nom.split("|")[0]!.trim().toLowerCase()}`;
@@ -79,6 +104,20 @@ function rank(items: ProductMatch[], profile: UserProfile): ProductMatch[] {
       return true;
     })
     .map((p) => ({ ...p, score: boostPreferredBrands(p, profile) }))
+    .map((p) =>
+      query
+        ? {
+            ...p,
+            score: Math.min(
+              1,
+              Math.round(
+                (p.score * (1 - RELEVANCE_WEIGHT) + titleOverlap(query, p.nom) * RELEVANCE_WEIGHT) *
+                  100,
+              ) / 100,
+            ),
+          }
+        : p,
+    )
     .sort((a, b) => b.score - a.score)
     .reduce<ProductMatch[]>(diversify, [])
     .slice(0, MAX_RESULTS);
@@ -97,7 +136,7 @@ function diversify(acc: ProductMatch[], p: ProductMatch, i: number, all: Product
 }
 
 /** « ZARA France », « zara.com » → « zara » ; « farfetch.com » → « farfetch ». */
-const brandKey = (shop: string) =>
+export const brandKey = (shop: string) =>
   shop
     .toLowerCase()
     .replace(/\.[a-z]{2,}$/, "")
@@ -117,7 +156,7 @@ function boostPreferredBrands(p: ProductMatch, profile: UserProfile): number {
 }
 
 /** Part des mots significatifs du titre produit retrouvés dans le titre de la page. */
-function titleOverlap(product: string, page: string): number {
+export function titleOverlap(product: string, page: string): number {
   const words = (s: string) =>
     new Set(
       s
@@ -179,15 +218,35 @@ type ShoppingItem = {
   image?: string;
 };
 
-async function searchShopping(query: string): Promise<ProductMatch[]> {
-  const json = (await serp(google(query, "&udm=28"))) as { shopping?: ShoppingItem[] };
+/**
+ * Formats d'URL Google Shopping équivalents. Bright Data rejette aléatoirement certaines réponses
+ * (« response body was rejected ») puis bloque l'URL EXACTE 60 s (429 « recently failed ») :
+ * réessayer la même URL ne sert à rien, une URL différente pour la même requête passe souvent.
+ */
+const SHOPPING_URL_VARIANTS = ["&udm=28", "&tbm=shop", "&udm=28&pws=0"];
+
+export async function searchShopping(query: string): Promise<ProductMatch[]> {
+  let json: { shopping?: ShoppingItem[] } | null = null;
+  let lastError: unknown = null;
+  for (const extra of SHOPPING_URL_VARIANTS) {
+    try {
+      json = (await serp(google(query, extra), 30_000, 0)) as { shopping?: ShoppingItem[] };
+      break;
+    } catch (err) {
+      lastError = err;
+      console.warn(
+        `[brightdata] « ${query} » ${extra} : ${err instanceof Error ? err.message.slice(0, 80) : err}`,
+      );
+    }
+  }
+  if (!json) throw lastError;
   const out: ProductMatch[] = [];
   (json.shopping ?? []).forEach((it, i) => {
     const price = parsePrice(it.price);
     const parsed = ProductMatchSchema.safeParse({
       id: `bd-${hash(`${it.shop}|${it.title}`)}`,
-      marque: it.shop,
-      nom: it.title,
+      marque: decodeEntities(it.shop),
+      nom: decodeEntities(it.title),
       prix: price?.value,
       devise: price?.currency,
       url: it.link,
@@ -198,6 +257,121 @@ async function searchShopping(query: string): Promise<ProductMatch[]> {
     if (parsed.success) out.push(parsed.data);
   });
   return out;
+}
+
+/** Résultat Google Images (brd_json=1) : page d'origine, miniature Google et photo HD. */
+export type ImageHit = {
+  link: string;
+  title: string;
+  /** Miniature gstatic (légère) : utilisée par le filtre IA. */
+  thumb: string;
+  /** Photo d'origine du site (HD) : affichée dans l'extension. */
+  image: string;
+};
+
+type RawImage = { link?: string; title?: string; image?: string; original_image?: string };
+
+/**
+ * Google Images par texte via Bright Data (testé le 17/11/2026 : 100 images, 3 à 6 s).
+ * Avec `site:` on obtient directement les fiches produit du magasin et leur photo officielle.
+ */
+export async function searchImages(query: string): Promise<ImageHit[]> {
+  // Requête « couverte » : la latence Bright Data varie de 3 à 30 s pour la même requête.
+  // Si le 1er format n'a pas répondu après HEDGE_MS, on lance le 2nd ; la 1re réponse gagne.
+  let settled = false;
+  const run = (extra: string) =>
+    serp(google(query, extra), 25_000, 0).then((json) =>
+      parseImages(json as { images?: RawImage[] }),
+    );
+  const first = run("&udm=2");
+  const second = new Promise((r) => setTimeout(r, HEDGE_MS)).then(() => {
+    if (settled) throw new Error("inutile");
+    return run("&tbm=isch");
+  });
+  try {
+    return await Promise.any([first, second]);
+  } catch (err) {
+    const cause = err instanceof AggregateError ? err.errors[0] : err;
+    console.warn(
+      `[brightdata] images « ${query} » : ${cause instanceof Error ? cause.message.slice(0, 80) : cause}`,
+    );
+    throw cause;
+  } finally {
+    settled = true;
+  }
+}
+
+const HEDGE_MS = 4_000;
+
+function parseImages(json: { images?: RawImage[] }): ImageHit[] {
+  return (json.images ?? []).flatMap((it) =>
+    it.link?.startsWith("http") && it.title && (it.image || it.original_image)
+      ? [
+          {
+            link: it.link,
+            title: decodeEntities(it.title)!,
+            thumb: it.image ?? it.original_image!,
+            image: it.original_image ?? it.image!,
+          },
+        ]
+      : [],
+  );
+}
+
+const SERP_MAX_RESULTS = 12;
+
+/**
+ * Recherche brute, sans filtre budget ni classement : ce que montrerait la console SERP
+ * Bright Data pour la requête (Google Shopping FR), avec repli sur les requêtes plus larges.
+ */
+export async function serpShopping(
+  query: string,
+  fallbackQueries: string[] = [],
+): Promise<{ requete: string; resultats: ProductMatch[] }> {
+  if (config.mocks.brightdata) {
+    return { requete: query, resultats: mockResults(MOCK_PROFILE_FOR_SERP) };
+  }
+  const { used, items } = await searchWithFallback(
+    relaxQueries(cleanQuery(query), fallbackQueries.map(cleanQuery)),
+  );
+  return { requete: used, resultats: items.slice(0, SERP_MAX_RESULTS) };
+}
+
+const MOCK_PROFILE_FOR_SERP = { marquesPreferees: [] } as unknown as UserProfile;
+
+/** Variantes de la requête, de la plus précise à la plus large (dédoublonnées, 4 max). */
+export function relaxQueries(query: string, fallbacks: string[]): string[] {
+  const words = query.split(" ");
+  const truncated = words.length > 3 ? [words.slice(0, 3).join(" ")] : [];
+  const all = [query, ...fallbacks, ...truncated].map((q) => q.trim()).filter(Boolean);
+  return [...new Set(all.map((q) => q.toLowerCase()))].slice(0, 4);
+}
+
+/**
+ * Essaie les variantes une à une. Bright Data rejette certaines formulations
+ * (« response body was rejected », « recently failed ») : on passe alors à la suivante.
+ */
+async function searchWithFallback(
+  queries: string[],
+): Promise<{ used: string; items: ProductMatch[] }> {
+  let lastError: unknown = null;
+  for (const q of queries) {
+    try {
+      const items = await searchShopping(q);
+      if (items.length) return { used: q, items };
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  if (lastError) {
+    console.error("[brightdata] toutes les variantes ont échoué", queries, lastError);
+    throw new HttpError(
+      503,
+      "La recherche est momentanément indisponible (Google Shopping). Réessaie dans une minute.",
+      lastError instanceof Error ? lastError.message : lastError,
+    );
+  }
+  return { used: queries[0]!, items: [] };
 }
 
 type OrganicItem = { link?: string; title?: string };
@@ -255,6 +429,20 @@ async function searchLens(imageUrl: string): Promise<ProductMatch[]> {
 }
 
 // ---------- utilitaires ----------
+
+/** Google renvoie parfois des entités HTML dans les titres (« H&amp;M »). */
+const ENTITIES: Record<string, string> = {
+  amp: "&",
+  quot: '"',
+  apos: "'",
+  lt: "<",
+  gt: ">",
+  nbsp: " ",
+};
+const decodeEntities = (s: string | undefined) =>
+  s
+    ?.replace(/&(amp|quot|apos|lt|gt|nbsp);/g, (_, e: string) => ENTITIES[e]!)
+    .replace(/&#(\d+);/g, (_, n: string) => String.fromCharCode(Number(n)));
 
 const hash = (s: string) => createHash("sha1").update(s).digest("hex").slice(0, 12);
 
