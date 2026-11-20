@@ -93,7 +93,9 @@ const toRow = (o: Partial<OrderRecord>): Partial<OrderRow> => {
 };
 
 export async function getProfile(userId: string): Promise<UserProfile | null> {
-  if (config.mocks.supabase) return memProfiles.get(userId) ?? null;
+  // Mock : un compte réel du site (uuid Supabase) reprend le profil de démo, sinon l'extension
+  // connectée tomberait sur « Profil introuvable ».
+  if (config.mocks.supabase) return memProfiles.get(userId) ?? { ...DEMO_PROFILE, id: userId };
   const { data, error } = await db().from("profiles").select("*").eq("id", userId).maybeSingle();
   if (error) throw error;
   if (!data) return null;

@@ -126,7 +126,7 @@ export async function startPurchase(
   } catch (e) {
     set({ error: errMsg(e) });
     signalBusy(false);
-    notify("Achat impossible", errMsg(e));
+    notify("Ajout au panier impossible", errMsg(e));
   }
 }
 
@@ -192,6 +192,10 @@ function update(order: OrderStatus) {
     livraison: ["Choisis ta livraison", `${product.nom} est dans le panier ${product.marque}.`],
     paiement: ["Confirme le paiement", `${product.marque} · ${order.total ?? product.nom}`],
     banque: ["Valide dans ton appli bancaire", "Ta banque demande de confirmer le paiement."],
+    au_panier: [
+      "Ajouté au panier ✓",
+      `${product.nom} (taille ${current.size}) est dans ton panier ${product.marque}.`,
+    ],
     commandee: [
       "Commande validée ✓",
       `Tu vas recevoir l'e-mail de confirmation de ${product.marque}.`,
@@ -203,16 +207,13 @@ function update(order: OrderStatus) {
             `${product.nom} n'est plus disponible en taille ${current.size} chez ${product.marque}.`,
           ]
         : order.motif === "site_bloque"
-          ? [
-              `${product.marque} bloque les achats automatiques`,
-              "Finis l'achat sur le site en un clic.",
-            ]
+          ? [`${product.marque} bloque les agents`, "Ajoute l'article sur le site en un clic."]
           : order.motif === "connexion"
             ? [
                 `Connexion ${product.marque} impossible`,
                 order.message ?? "Vérifie le compte enregistré.",
               ]
-            : ["Commande interrompue", order.message ?? "L'agent n'a pas pu terminer."],
+            : ["Ajout au panier interrompu", order.message ?? "L'agent n'a pas pu terminer."],
   };
   const [title, body] = texts[signal] ?? ["BuyFit", ""];
   notify(title, body);

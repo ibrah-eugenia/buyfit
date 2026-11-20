@@ -1,7 +1,7 @@
 /**
- * Lanceur flottant BuyFit sur Pinterest : le logo est ancré au bord droit de la page.
- * Seule la bande blanche à points (poignée) permet de le déplacer, et uniquement de haut
- * en bas (position mémorisée). Un clic sur le logo ouvre / ferme le panneau à sa gauche.
+ * Lanceur flottant BuyFit sur Pinterest, ancré au bord droit de la page : le logo, puis à sa
+ * droite (contre le bord) une poignée à points. On attrape la poignée (curseur « main ») pour
+ * déplacer le lanceur de haut en bas (position mémorisée). Un clic sur le logo ouvre / ferme le panneau à sa gauche.
  * Le panneau est la page de l'extension (sidepanel.html?mode=embed) dans une iframe :
  * elle garde l'accès aux API de l'extension. Le tout vit dans un shadow DOM pour ne pas
  * hériter du CSS de Pinterest.
@@ -12,38 +12,38 @@ import type { SelectionMessage } from "@/lib/messages";
 import { startScreenSelection } from "@/lib/screen-select";
 
 const POS_KEY = "buyfit:launcher-y";
-const DOCK_W = 44;
-const GRIP_H = 16;
-const LOGO_H = 44;
-const DOCK_H = GRIP_H + LOGO_H;
+const LOGO_W = 44;
+const GRIP_W = 14;
+const DOCK_W = LOGO_W + GRIP_W;
+const DOCK_H = 44;
 const MARGIN = 16;
 const GAP = 10;
 const PANEL_W = 380;
 const PANEL_H = 600;
 
 const SYMBOL = `<svg viewBox="15 -8 100 176" width="14" height="26" aria-hidden="true"><path d="M30 140 V20 H64 A30 30 0 0 1 64 80 H30 H70 A30 30 0 0 1 70 140 Z" fill="none" stroke="#fff" stroke-width="26" stroke-linejoin="round"/><line x1="62" y1="-6" x2="62" y2="166" stroke="#fff" stroke-width="13"/></svg>`;
-const DOTS = `<svg width="14" height="6" viewBox="0 0 14 6" aria-hidden="true">${[1, 7, 13]
-  .flatMap((x) => [1, 5].map((y) => `<circle cx="${x}" cy="${y}" r="1.2"/>`))
+// Poignée : 2 colonnes × 3 rangées de points.
+const DOTS = `<svg width="6" height="14" viewBox="0 0 6 14" aria-hidden="true">${[1, 5]
+  .flatMap((x) => [1, 7, 13].map((y) => `<circle cx="${x}" cy="${y}" r="1.2"/>`))
   .join("")}</svg>`;
 
 const CSS = `
 :host { all: initial; }
 .dock {
   position: fixed; z-index: 2147483647; right: 0; width: ${DOCK_W}px; height: ${DOCK_H}px;
-  display: flex; flex-direction: column; border-radius: 12px 0 0 12px; overflow: hidden;
+  display: flex; flex-direction: row; border-radius: 12px 0 0 12px; overflow: hidden;
   box-shadow: 0 6px 18px rgba(17,17,17,.22), 0 0 0 1px rgba(17,17,17,.08);
-  transition: width .15s ease;
 }
-.dock:hover { width: ${DOCK_W + 4}px; }
 .dock.dragging { transition: none; box-shadow: 0 10px 28px rgba(17,17,17,.3), 0 0 0 1px rgba(17,17,17,.1); }
 .grip {
-  height: ${GRIP_H}px; flex-shrink: 0; border: 0; padding: 0; background: #fff; color: #9a948d;
-  display: flex; align-items: center; justify-content: center; cursor: ns-resize; touch-action: none;
+  width: ${GRIP_W}px; flex-shrink: 0; border: 0; padding: 0; background: #fff; color: #9a948d;
+  display: flex; align-items: center; justify-content: center; cursor: grab; touch-action: none;
   fill: currentColor;
 }
+.dock.dragging, .dock.dragging .grip { cursor: grabbing; }
 .grip:hover, .dock.dragging .grip { color: #7A1F2B; }
 .logo {
-  flex: 1; border: 0; padding: 0; background: #7A1F2B; cursor: pointer;
+  width: ${LOGO_W}px; flex-shrink: 0; border: 0; padding: 0; background: #7A1F2B; cursor: pointer;
   display: flex; align-items: center; justify-content: center; transition: background .15s ease;
 }
 .logo:hover { background: #5C1420; }
@@ -62,21 +62,23 @@ const CSS = `
 }
 .panel.open { opacity: 1; transform: none; pointer-events: auto; }
 .panel iframe { display: block; width: 100%; height: 100%; border: 0; }
-@media (prefers-reduced-motion: reduce) { .dock, .logo, .panel { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .logo, .panel { transition: none; } }
 `;
 
 export default defineContentScript({
   matches: ["*://*.pinterest.com/*", "*://*.pinterest.fr/*"],
   async main() {
     if (window.top !== window) return; // pas dans les iframes de Pinterest
+    // Réinjecté après un rechargement de l'extension : on retire l'ancien lanceur orphelin.
+    document.querySelectorAll("buyfit-launcher").forEach((el) => el.remove());
 
     const host = document.createElement("buyfit-launcher");
     const root = host.attachShadow({ mode: "closed" });
     root.innerHTML = `<style>${CSS}</style>
       <div class="panel" role="dialog" aria-label="BuyFit"></div>
       <div class="dock">
-        <button class="grip" type="button" aria-label="Déplacer BuyFit (flèches haut / bas)">${DOTS}</button>
         <button class="logo" type="button" aria-label="Ouvrir BuyFit" aria-expanded="false">${SYMBOL}</button>
+        <button class="grip" type="button" aria-label="Déplacer BuyFit">${DOTS}</button>
       </div>`;
     document.documentElement.append(host);
 
@@ -189,9 +191,17 @@ export default defineContentScript({
       const wasOpen = open;
       setOpen(false);
       host.style.display = "none";
-      const result = await startScreenSelection();
-      host.style.display = "";
-      selecting = false;
+      // Toujours réafficher le logo, même si la sélection échoue ou est interrompue
+      // (sinon il reste masqué jusqu'au rechargement de la page).
+      let result: Awaited<ReturnType<typeof startScreenSelection>> = null;
+      try {
+        result = await startScreenSelection();
+      } catch {
+        result = null;
+      } finally {
+        host.style.display = "";
+        selecting = false;
+      }
       if (wasOpen) setOpen(true);
       const msg: SelectionMessage = result
         ? { type: "buyfit:selection", imageUrl: result.imageUrl, rect: result.rect }

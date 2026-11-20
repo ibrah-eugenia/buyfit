@@ -51,6 +51,7 @@ import { db } from "./modules/supabase.js";
 import { tryOn } from "./modules/tryon.js";
 import { searchStores } from "./modules/search.js";
 import { identifyItem } from "./modules/vision.js";
+import { bodyOf } from "./modules/body.js";
 
 const allowedOrigins = config.CORS_ORIGINS?.split(",")
   .map((s) => s.trim())
@@ -187,13 +188,26 @@ const fittingLimit = bodyLimit({
   onError: (c) => c.json({ error: "La photo dépasse 8 Mo." }, 413),
 });
 
-app.post("/avatar", fittingLimit, async (c) => {
-  await fittingUser(c.req.header("Authorization"));
+// Planche visage + planche corps : deux images, d'où une limite double.
+const avatarLimit = bodyLimit({
+  maxSize: 2 * MAX_IMAGE + 65536,
+  onError: (c) => c.json({ error: "Les photos dépassent 16 Mo au total." }, 413),
+});
+
+app.post("/avatar", avatarLimit, async (c) => {
+  const userId = await fittingUser(c.req.header("Authorization"));
+  // Corps décrit depuis le profil (taille, poids, morphologie) : rendu fidèle, pas flatteur.
+  const body = bodyOf(userId).catch(() => "");
   const input = await c.req.formData().catch(() => {
     throw new HttpError(400, "Photo manquante.");
   });
   const form = new FormData();
   form.set("person", checkPhoto(input.get("person")), "person");
+  if (input.get("face")) form.set("face", checkPhoto(input.get("face")), "face");
+  const pose = Number(input.get("pose") ?? 0);
+  form.set("pose", String(Number.isInteger(pose) && pose >= 0 && pose <= 2 ? pose : 0));
+  const description = await body;
+  if (description) form.set("body", description.slice(0, 400));
   const image = await modelImage("/avatar", form);
   return new Response(image, {
     headers: { "Content-Type": image.type, "Cache-Control": "private, no-store" },
@@ -212,7 +226,10 @@ app.post("/tryon", fittingLimit, async (c) => {
       return c.json(await accountTryOn(userId, checkPhoto(form.get("garment"))));
     }
     const req = await body(c, TryOnApiRequestSchema.omit({ userId: true }));
-    if (!req.userPhotoUrl) return c.json(await accountTryOn(userId, req.garmentImageUrl));
+    if (!req.userPhotoUrl)
+      return c.json(
+        await accountTryOn(userId, req.garmentImageUrl, req.garmentName, req.productUrl),
+      );
     return c.json(
       await tryOn({ userPhotoUrl: req.userPhotoUrl, garmentImageUrl: req.garmentImageUrl }),
     );
@@ -266,10 +283,12 @@ app.post("/order", async (c) => {
 // GET /order/:id → OrderStatus (suit la session H)
 app.get("/order/:id", async (c) => {
   let order = await requireOrder(c.req.param("id"));
-  if (!order.hSessionId || order.statut === "commandee" || order.statut === "echec") {
+  if (!order.hSessionId || order.statut === "commandee") {
     return c.json(toStatus(order));
   }
   const { hSessionId, confirmed } = order;
+  // Échec / panier déjà enregistrés : on relit quand même la session pour renvoyer le motif et
+  // le message (sinon l'extension n'affiche qu'un « n'a pas pu terminer » générique).
   const state = await call("hcompany", () => getSessionState(hSessionId, confirmed));
   if (state.statut !== order.statut) {
     order = await call("supabase", () => updateOrder(order.id, { statut: state.statut }));

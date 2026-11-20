@@ -102,10 +102,26 @@ export const MensurationsWebSchema = MensurationsSchema.extend({
 });
 export type MensurationsWeb = z.infer<typeof MensurationsWebSchema>;
 
+/** Tailles portées d'habitude, par type de vêtement. */
+export const TAILLES_LETTRES = ["XS", "S", "M", "L", "XL", "XXL"] as const;
+export const TAILLES_PANTALON = ["34", "36", "38", "40", "42", "44", "46", "48", "50", "52"] as const;
+export const TAILLES_HABITUELLES = [
+  { key: "haut", label: "T-shirt, pull", options: TAILLES_LETTRES },
+  { key: "veste", label: "Veste, manteau", options: TAILLES_LETTRES },
+  { key: "bas", label: "Pantalon, jean", options: TAILLES_PANTALON },
+] as const;
+
 export const CorpsStepSchema = z.object({
   mensurations: MensurationsWebSchema,
   poidsKg: nombre("Poids", 30, 250),
   pointure: z.string().trim().min(1, "Indique ta pointure"),
+  tailles: z.object({
+    haut: z.string({ error: "Choisis ta taille de t-shirt" }).min(1, "Choisis ta taille de t-shirt"),
+    veste: z.string({ error: "Choisis ta taille de veste" }).min(1, "Choisis ta taille de veste"),
+    bas: z
+      .string({ error: "Choisis ta taille de pantalon" })
+      .min(1, "Choisis ta taille de pantalon"),
+  }),
 });
 export type CorpsStep = z.infer<typeof CorpsStepSchema>;
 

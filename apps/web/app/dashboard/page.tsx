@@ -158,7 +158,7 @@ function Dashboard() {
                     {data.looks.map((l) => (
                       <li
                         key={l.id}
-                        className="flex flex-col overflow-hidden rounded-2xl border border-line-soft"
+                        className="flex flex-col overflow-hidden rounded-[24px] border border-ink/10"
                       >
                         <ProductImage
                           src={l.imageUrl}
@@ -207,7 +207,7 @@ function Dashboard() {
                       return (
                         <li
                           key={`${p.captureId}-${p.id}`}
-                          className="flex gap-3 rounded-[14px] border border-line-soft p-2.5"
+                          className="flex gap-3 rounded-[20px] border border-ink/10 p-2.5"
                         >
                           <ProductImage
                             src={p.imageUrl}
@@ -247,7 +247,7 @@ function Dashboard() {
                     {data.essayages.map((e) => (
                       <li
                         key={e.id}
-                        className="flex flex-col overflow-hidden rounded-2xl border border-line-soft"
+                        className="flex flex-col overflow-hidden rounded-[24px] border border-ink/10"
                       >
                         <div className="relative aspect-[3/4] bg-linen">
                           {e.statut === "pret" && e.resultImageUrl ? (

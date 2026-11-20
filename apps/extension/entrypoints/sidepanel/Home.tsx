@@ -1,6 +1,7 @@
 import type { IdentifiedItem, ProductMatch } from "@buyfit/shared";
 import { useEffect, useRef, useState } from "react";
 import { browser } from "wxt/browser";
+import { openWeb, sizeForPiece, type Account } from "@/lib/account";
 import { getActiveTab } from "@/lib/active-tab";
 import { api } from "@/lib/api";
 import { cropToDataUrl, type NormRect } from "@/lib/crop";
@@ -9,7 +10,6 @@ import type { PagePreview, SelectionMessage, StartSelectMessage } from "@/lib/me
 import { normalizePinUrl } from "@/lib/pin-url";
 import { showPurchase, usePurchase } from "@/lib/purchase";
 import { Checkout, PurchaseBanner } from "./Checkout";
-import { PieceSelector } from "./PieceSelector";
 import { Results, type SearchState } from "./Results";
 import { Spinner } from "./Spinner";
 
@@ -53,9 +53,9 @@ const flowOf = (pinUrl: string): Flow => {
 /**
  * Accueil : l'épingle de l'onglet actif est chargée automatiquement (et suivie quand l'onglet
  * change). L'utilisateur choisit sa taille puis entoure une pièce ; la recherche
- * Zara / Mango / Uniqlo démarre seule et s'affiche sur l'écran de résultats.
+ * Zara / Uniqlo démarre seule et s'affiche sur l'écran de résultats.
  */
-export function Home({ userId }: { userId: string }) {
+export function Home({ userId, account }: { userId: string; account?: Account }) {
   const purchase = usePurchase();
   // Achat en cours : écran d'achat par-dessus tout (il survit au changement d'épingle),
   // ou bandeau compact s'il est masqué.
@@ -63,12 +63,12 @@ export function Home({ userId }: { userId: string }) {
   return (
     <>
       {purchase && <PurchaseBanner purchase={purchase} onShow={showPurchase} />}
-      <PinHome userId={userId} />
+      <PinHome userId={userId} account={account} />
     </>
   );
 }
 
-function PinHome({ userId }: { userId: string }) {
+function PinHome({ userId, account }: { userId: string; account?: Account }) {
   const [pinUrl, setPinUrl] = useState<string | null>(null);
   const [size, setSize] = useState<string | null>(null);
 
@@ -125,26 +125,40 @@ function PinHome({ userId }: { userId: string }) {
     );
   }
   // Nouvelle épingle → nouveau parcours (état remis à zéro par la clé).
-  return <PinFlow key={pinUrl} pinUrl={pinUrl} userId={userId} size={size} onSize={chooseSize} />;
+  return (
+    <PinFlow
+      key={pinUrl}
+      pinUrl={pinUrl}
+      userId={userId}
+      account={account}
+      size={size}
+      onSize={chooseSize}
+    />
+  );
 }
 
 function PinFlow({
   pinUrl,
   userId,
+  account,
   size,
   onSize: chooseSize,
 }: {
   pinUrl: string;
   userId: string;
+  account?: Account;
   size: string | null;
   onSize: (s: string) => void;
 }) {
   const [preview, setPreview] = useState<Preview>({ kind: "loading", url: pinUrl });
-  const [selecting, setSelecting] = useState(false); // sélection dans le panneau (repli)
   const [screenSelecting, setScreenSelecting] = useState(false); // sélection sur la page
   const [piece, setPieceState] = useState<Piece | null>(() => flowOf(pinUrl).piece);
   const [search, setSearchState] = useState<SearchState>(() => flowOf(pinUrl).search);
   const [error, setError] = useState<string | null>(null);
+  /** Taille du compte selon la pièce (pantalon, veste, haut) ; sinon celle choisie ici. */
+  const sizeFor = (item?: IdentifiedItem) =>
+    (account && sizeForPiece(account.tailles, item?.categorie)) || size;
+  const accountSizes = account?.tailles.haut ? account.tailles : null;
   // Écrit aussi dans le cache : un résultat qui arrive après démontage n'est pas perdu.
   const setPiece = (p: Piece | null) => {
     flowOf(pinUrl).piece = p;
@@ -181,7 +195,6 @@ function PinFlow({
 
   /** Zone choisie → découpe → identification (vision) → recherche dans les 3 magasins. */
   const identify = async (imageUrl: string, rect: NormRect) => {
-    setSelecting(false);
     setError(null);
     let cropUrl = "";
     try {
@@ -199,12 +212,17 @@ function PinFlow({
 
   const runSearch = async (item: IdentifiedItem, cropUrl: string) => {
     setSearch({ kind: "loading" });
+    const taille = sizeFor(item)?.split("/")[0];
+    // Genre du compte en priorité (un homme qui entoure un pull cherche au rayon homme),
+    // sinon celui deviné sur l'image.
+    const g = account?.genre;
+    const genre = g === "homme" || g === "femme" ? g : item.genre;
     try {
       const res = await api.search({
         userId,
         requete: item.requete,
-        ...(item.genre ? { genre: item.genre } : {}),
-        ...(size ? { taille: size } : {}),
+        ...(genre ? { genre } : {}),
+        ...(taille ? { taille } : {}),
         imageDataUrl: cropUrl,
       });
       setSearch({ kind: "ready", resultats: res.resultats as ProductMatch[] });
@@ -232,19 +250,32 @@ function PinFlow({
     return () => browser.runtime.onMessage.removeListener(onMessage);
   }, []);
 
-  /** Sélection à l'écran sur la page Pinterest ; repli dans le panneau si impossible. */
+  /**
+   * Sélection directement sur la page Pinterest (lanceur). Si le lanceur ne répond pas
+   * (extension rechargée sans rafraîchir l'onglet), on le réinjecte puis on relance.
+   */
   const startSelection = async () => {
     setError(null);
+    const ask = (tabId: number) =>
+      browser.tabs
+        .sendMessage(tabId, { type: "buyfit:start-select" } satisfies StartSelectMessage)
+        .then((r) => (r as { ok?: boolean } | undefined)?.ok === true)
+        .catch(() => false);
     try {
       const tab = await getActiveTab();
       if (tab?.id === undefined) throw new Error("onglet introuvable");
-      const msg: StartSelectMessage = { type: "buyfit:start-select" };
-      const res = (await browser.tabs.sendMessage(tab.id, msg)) as { ok?: boolean } | undefined;
-      if (!res?.ok) throw new Error("lanceur absent");
+      let ok = await ask(tab.id);
+      if (!ok) {
+        await browser.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ["/content-scripts/launcher.js"],
+        });
+        ok = await ask(tab.id);
+      }
+      if (!ok) throw new Error("lanceur absent");
       setScreenSelecting(true);
     } catch {
-      if (preview.kind === "ready") setSelecting(true);
-      else setError("Recharge la page Pinterest pour sélectionner une pièce.");
+      setError("Recharge la page Pinterest pour sélectionner une pièce.");
     }
   };
 
@@ -261,7 +292,7 @@ function PinFlow({
         piece={piece}
         search={search}
         userId={userId}
-        size={size}
+        size={sizeFor(piece.kind === "ready" ? piece.item : undefined)}
         onRestart={restart}
         onRetry={
           piece.kind === "ready" ? () => void runSearch(piece.item, piece.cropUrl) : undefined
@@ -273,36 +304,51 @@ function PinFlow({
   return (
     <div className="screen">
       <div className="content">
-        {selecting && preview.kind === "ready" ? (
-          <PieceSelector
-            imageUrl={preview.data.imageUrl!}
-            alt={preview.data.title ?? "Épingle Pinterest"}
-            onCancel={() => setSelecting(false)}
-            onConfirm={(rect) => void identify(preview.data.imageUrl!, rect)}
-          />
-        ) : (
-          <PinCard preview={preview} />
-        )}
+        <PinCard preview={preview} />
 
-        <div className="field">
-          <span className="label" id="size-label">
-            Ta taille
-          </span>
-          <div className="size-row" role="radiogroup" aria-labelledby="size-label">
-            {SIZES.map((s) => (
-              <button
-                key={s}
-                type="button"
-                role="radio"
-                aria-checked={size === s}
-                className={`chip${size === s ? " on" : ""}`}
-                onClick={() => chooseSize(s)}
-              >
-                {s}
+        {accountSizes ? (
+          <div className="field">
+            <span className="label">Tes tailles</span>
+            <div className="account-sizes">
+              <span>
+                Haut <strong>{accountSizes.haut}</strong>
+              </span>
+              {accountSizes.veste && (
+                <span>
+                  Veste <strong>{accountSizes.veste}</strong>
+                </span>
+              )}
+              {accountSizes.bas && (
+                <span>
+                  Pantalon <strong>{accountSizes.bas}</strong>
+                </span>
+              )}
+              <button type="button" className="link" onClick={() => openWeb("/settings")}>
+                Modifier
               </button>
-            ))}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="field">
+            <span className="label" id="size-label">
+              Ta taille
+            </span>
+            <div className="size-row" role="radiogroup" aria-labelledby="size-label">
+              {SIZES.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  role="radio"
+                  aria-checked={size === s}
+                  className={`chip${size === s ? " on" : ""}`}
+                  onClick={() => chooseSize(s)}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {error && <p className="error">{error}</p>}
       </div>
@@ -311,14 +357,14 @@ function PinFlow({
         <button
           type="button"
           className="btn primary"
-          disabled={!size || selecting || screenSelecting || preview.kind !== "ready"}
+          disabled={(!size && !accountSizes) || screenSelecting || preview.kind !== "ready"}
           onClick={() => void startSelection()}
         >
           {screenSelecting ? (
             <>
               <Spinner light /> Entoure la pièce sur la page…
             </>
-          ) : !size ? (
+          ) : !size && !accountSizes ? (
             "Choisis ta taille"
           ) : (
             <>

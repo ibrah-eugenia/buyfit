@@ -94,20 +94,20 @@ function SearchView() {
 
   return (
     <PageContainer>
-      <div className="flex items-center gap-4">
-        <Avatar className="size-14 ring-2 ring-blush">
-          {profile?.photoTeteUrl && (
-            <AvatarImage src={profile.photoTeteUrl} alt="Ton avatar" className="object-cover" />
-          )}
-          <AvatarFallback className="bg-blush font-bold text-brand-deep">
-            {prenom?.[0]?.toUpperCase() ?? "B"}
-          </AvatarFallback>
-        </Avatar>
-        <PageTitle
-          overline={prenom ? `Pour toi, ${prenom}` : "Pour toi"}
-          title="Qu'est-ce qu'on cherche ?"
-        />
-      </div>
+      <PageTitle
+        leading={
+          <Avatar className="size-9 ring-2 ring-blush">
+            {profile?.photoTeteUrl && (
+              <AvatarImage src={profile.photoTeteUrl} alt="Ton avatar" className="object-cover" />
+            )}
+            <AvatarFallback className="bg-blush text-[13px] font-bold text-brand-deep">
+              {prenom?.[0]?.toUpperCase() ?? "B"}
+            </AvatarFallback>
+          </Avatar>
+        }
+        overline={prenom ? `Pour toi, ${prenom}` : "Pour toi"}
+        title="Qu'est-ce qu'on cherche ?"
+      />
 
       <form
         role="search"
@@ -131,7 +131,7 @@ function SearchView() {
               value={voix.ecoute ? voix.interim || texte : texte}
               onChange={(e) => setTexte(e.target.value)}
               placeholder="Ex. blazer noir coupe droite"
-              className="h-14 rounded-2xl pr-14 pl-12 text-base"
+              className="h-14 rounded-full bg-linen pr-14 pl-12 text-base sm:h-16"
               aria-invalid={!!erreurSaisie}
               aria-describedby={erreurSaisie ? "recherche-err" : "recherche-aide"}
             />
@@ -144,7 +144,7 @@ function SearchView() {
                 aria-label={voix.ecoute ? "Arrêter la dictée" : "Dicter ma recherche"}
                 aria-pressed={voix.ecoute}
                 className={cn(
-                  "absolute top-1/2 right-2 -translate-y-1/2 rounded-xl",
+                  "absolute top-1/2 right-2 -translate-y-1/2",
                   voix.ecoute && "animate-pulse",
                 )}
               >
@@ -155,7 +155,7 @@ function SearchView() {
           <Button
             type="submit"
             size="lg"
-            className="h-14 rounded-2xl px-6"
+            className="h-14 px-7 sm:h-16"
             disabled={etat.type === "chargement"}
           >
             <span className="hidden sm:inline">Rechercher</span>

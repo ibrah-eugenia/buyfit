@@ -15,19 +15,21 @@ export type OrderRequest = z.infer<typeof OrderRequestSchema>;
 
 /**
  * Cycle de vie d'une commande.
- * `confirmation_requise` : l'agent s'arrête avant le paiement final et attend
- * le feu vert explicite de l'utilisateur (garde-fou obligatoire).
+ * `au_panier` : l'agent a ajouté l'article au panier du compte marchand et s'est arrêté ;
+ * l'utilisateur finalise le paiement lui-même (authentification forte DSP2 : 3-D Secure).
+ * `confirmation_requise` / `commandee` : ancien parcours d'achat complet (non utilisé).
  */
 export const OrderStatutSchema = z.enum([
   "en_attente",
   "en_cours",
   "confirmation_requise",
+  "au_panier",
   "commandee",
   "echec",
 ]);
 export type OrderStatut = z.infer<typeof OrderStatutSchema>;
 
-export const ORDER_TERMINAL_STATUTS: readonly OrderStatut[] = ["commandee", "echec"];
+export const ORDER_TERMINAL_STATUTS: readonly OrderStatut[] = ["au_panier", "commandee", "echec"];
 
 /** Mode de livraison proposé par le marchand, relevé par l'agent. */
 export const LivraisonOptionSchema = z.object({

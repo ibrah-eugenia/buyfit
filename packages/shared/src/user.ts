@@ -11,8 +11,12 @@ export type Mensurations = z.infer<typeof MensurationsSchema>;
 
 /** Tailles habituelles de l'utilisateur, au format marchand (ex. "M", "38", "42"). */
 export const TaillesSchema = z.object({
+  /** T-shirt, chemise, pull (XS…XXL). */
   haut: z.string().optional(),
+  /** Pantalon, jean (taille FR 34…52). */
   bas: z.string().optional(),
+  /** Veste, manteau, blazer (XS…XXL). */
+  veste: z.string().optional(),
   pointure: z.string().optional(),
 });
 export type Tailles = z.infer<typeof TaillesSchema>;

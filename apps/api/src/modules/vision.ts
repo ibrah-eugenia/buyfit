@@ -7,20 +7,34 @@
 import { IdentifiedItemSchema, type IdentifiedItem } from "@buyfit/shared";
 import { config } from "../config.js";
 import { HttpError } from "../errors.js";
+import { createHash } from "node:crypto";
+import { TtlCache } from "./cache.js";
+
+/** Même découpe → même identification pendant 1 h (le modèle varie d'un appel à l'autre). */
+const identified = new TtlCache<IdentifiedItem>(60 * 60_000);
 
 const HF_CHAT_URL = "https://router.huggingface.co/v1/chat/completions";
 
 const PROMPT = `Tu es un expert mode. L'image montre UNE pièce de vêtement ou un accessoire, sélectionnée par l'utilisateur.
 Identifie-la pour la retrouver en boutique en ligne. Réponds UNIQUEMENT par un objet JSON, sans texte autour :
 {"nom": "nom précis en français (type, coupe, matière, motif, couleur)",
- "requete": "requête Google Shopping en français, 4 à 6 mots, sans marque sauf logo visible",
+ "requete": "requête Google Shopping en français, 3 à 5 mots, vocabulaire standard des boutiques, toujours dans cet ordre : type + détail principal (col, coupe ou matière) + couleur (la même que le champ couleur, prise dans la liste ci-dessous) (ex. « pull col zippé vert », « pantalon chino beige », « veste en jean bleu ») ; sans marque sauf logo visible, sans adjectif subjectif",
  "secours": ["requête plus générique, 3 à 4 mots", "requête très générique, 2 à 3 mots (type + couleur)"],
  "categorie": "ex. veste, pantalon, chaussures, sac",
- "couleur": "couleur principale",
+ "couleur": "couleur principale, choisie UNIQUEMENT dans cette liste : noir, blanc, écru, beige, camel, marron, gris, bleu marine, bleu, bleu clair, vert, kaki, rouge, bordeaux, rose, jaune, orange, violet",
  "matiere": "matière probable ou vide",
  "genre": "homme, femme ou mixte"}`;
 
 export async function identifyItem(imageDataUrl: string): Promise<IdentifiedItem> {
+  const key = createHash("sha1").update(imageDataUrl).digest("hex");
+  const cached = identified.get(key);
+  if (cached) return cached;
+  const item = await identifyOnce(imageDataUrl);
+  identified.set(key, item);
+  return item;
+}
+
+async function identifyOnce(imageDataUrl: string): Promise<IdentifiedItem> {
   if (config.mocks.vision) {
     await new Promise((r) => setTimeout(r, 900));
     return {
@@ -43,7 +57,10 @@ export async function identifyItem(imageDataUrl: string): Promise<IdentifiedItem
     body: JSON.stringify({
       model: config.HF_VISION_MODEL,
       max_tokens: 300,
-      temperature: 0.1,
+      // Réponse reproductible : pas d'échantillonnage aléatoire.
+      temperature: 0,
+      top_p: 1,
+      seed: 7,
       messages: [
         {
           role: "user",

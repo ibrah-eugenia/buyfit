@@ -114,7 +114,7 @@ export function BrandPicker({
             id={listId}
             role="listbox"
             aria-label="Marques"
-            className="absolute inset-x-0 top-[calc(100%+6px)] z-20 max-h-72 overflow-y-auto rounded-xl border border-line bg-white p-1.5 shadow-[0_12px_32px_rgba(17,17,17,0.12)]"
+            className="absolute inset-x-0 top-[calc(100%+6px)] z-20 max-h-72 overflow-y-auto rounded-[20px] border border-ink/10 bg-white p-1.5 shadow-[0_12px_32px_rgba(17,17,17,0.12)]"
           >
             {options.map((o, i) => {
               const deja = choisies.has(normaliser(o.label));

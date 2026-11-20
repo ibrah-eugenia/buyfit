@@ -54,11 +54,8 @@ export function ResultCard({
   }
 
   return (
-    <article
-      className="flex flex-col overflow-hidden rounded-2xl border border-line-soft bg-white"
-      aria-labelledby={`titre-${result.id}`}
-    >
-      <div className="relative aspect-[4/5] bg-linen">
+    <article className="group/carte flex flex-col" aria-labelledby={`titre-${result.id}`}>
+      <div className="relative aspect-[4/5] overflow-hidden rounded-[24px] bg-linen">
         {vue === "essayage" && image ? (
           <>
             <img
@@ -92,7 +89,7 @@ export function ResultCard({
             if (file) void showFitting(file);
           }}
         />
-        <span className="absolute top-3 left-3 rounded-full bg-ink px-2.5 py-1 text-caption font-bold text-white">
+        <span className="absolute top-3 left-3 rounded-full border border-white/50 bg-white/40 px-3 py-1.5 text-caption font-semibold text-ink backdrop-blur-xl">
           {pourcentage} % ressemblant
         </span>
         {
@@ -119,15 +116,15 @@ export function ResultCard({
           </div>
         }
       </div>
-      <div className="flex flex-1 flex-col gap-3 p-4">
+      <div className="flex flex-1 flex-col gap-3 px-1 pt-4">
         <div className="flex flex-col gap-1">
           <p className="text-[11px] font-semibold tracking-[0.04em] text-grey uppercase">
             {result.categorie} · {result.marque}
           </p>
-          <h3 id={`titre-${result.id}`} className="text-[15px] font-semibold">
+          <h3 id={`titre-${result.id}`} className="text-[17px] leading-snug text-ink">
             {result.nom}
           </h3>
-          <p className="text-[15px] font-bold text-brand">
+          <p className="text-[22px] font-bold tracking-[-0.03em] text-ink">
             {formatPrix(result.prix, result.devise)}
           </p>
           {budgetMax !== undefined && result.prix > budgetMax && (
@@ -136,14 +133,14 @@ export function ResultCard({
             </p>
           )}
         </div>
-        <p className="flex items-start gap-2 rounded-[10px] bg-linen p-2.5 text-caption text-copy">
+        <p className="flex items-start gap-2 border-t border-ink/15 pt-3 text-caption text-copy">
           <Info className="mt-px size-3.5 shrink-0 text-brand" aria-hidden="true" />
           <span>
             D&apos;après le guide des tailles {result.marque} : taille conseillée{" "}
             <strong className="font-bold text-ink">{result.tailleConseillee}</strong>
           </span>
         </p>
-        <div className="mt-auto flex items-center justify-between gap-2">
+        <div className="mt-auto flex items-center justify-between gap-2 border-t border-ink/15 pt-3">
           <SizeSelect
             id={`taille-${result.id}`}
             value={taille}

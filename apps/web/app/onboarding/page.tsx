@@ -13,16 +13,17 @@ import { StepGenre } from "@/components/onboarding/step-genre";
 import { StepMarques } from "@/components/onboarding/step-marques";
 import { StepMorpho } from "@/components/onboarding/step-morpho";
 import { StepPhotos } from "@/components/onboarding/step-photos";
-import { Progress } from "@/components/ui/progress";
 import { saveProfile } from "@/lib/data";
 import { versEtape, versProfil } from "@/lib/profile-mapping";
 import type { WebProfile } from "@/lib/types";
 
+// Photos après Silhouette et Morphologie : le mannequin est généré avec la taille, le poids
+// et la morphologie du profil (corps fidèle, pas un corps de mannequin idéalisé).
 const ETAPES = [
   "Genre",
-  "Photos",
   "Silhouette",
   "Morphologie",
+  "Photos",
   "Budget et marques",
   "Contact",
   "Comptes",
@@ -62,84 +63,95 @@ function Onboarding() {
   const p = profile;
 
   return (
-    <div className="flex flex-1 flex-col">
-      <header className="border-b border-line-soft">
-        <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-4 sm:px-6">
-          <span className="text-[24px]">
+    <div className="flex flex-1 p-2 sm:p-4 lg:p-6">
+      <div className="flex flex-1 flex-col overflow-hidden rounded-[28px] bg-white">
+        <header className="flex h-[72px] items-center justify-between px-4 sm:h-20 sm:px-8 lg:px-12">
+          <span className="text-[26px]">
             <Logo />
           </span>
-          <span className="text-caption font-medium text-grey">
-            Étape {etape + 1} sur {ETAPES.length}
+          <span className="rounded-full bg-linen px-3 py-1.5 text-[13px] font-semibold text-ink">
+            Étape {etape + 1}
+            <span className="font-normal text-grey"> / {ETAPES.length}</span>
           </span>
-        </div>
-      </header>
-      <main className="mx-auto w-full max-w-4xl flex-1 px-4 pt-6 pb-10 sm:px-6 sm:pt-10">
-        <div className="mb-8 flex flex-col gap-3">
-          <Progress
-            value={((etape + 1) / ETAPES.length) * 100}
-            aria-label={`Progression : étape ${etape + 1} sur ${ETAPES.length}, ${ETAPES[etape]}`}
-            className="h-1.5 bg-line-soft [&>*]:bg-brand"
-          />
-          <ol className="hidden justify-between sm:flex" aria-label="Étapes">
-            {ETAPES.map((nom, i) => (
-              <li
-                key={nom}
-                aria-current={i === etape ? "step" : undefined}
-                className={`text-caption font-semibold ${i === etape ? "text-brand" : i < etape ? "text-ink" : "text-grey"}`}
-              >
-                {nom}
-              </li>
-            ))}
-          </ol>
-        </div>
+        </header>
+        <main className="mx-auto w-full max-w-4xl flex-1 px-4 pt-4 pb-10 sm:px-8 sm:pt-8">
+          <div className="mb-10 flex flex-col gap-3">
+            <ol
+              className="grid gap-1.5"
+              style={{ gridTemplateColumns: `repeat(${ETAPES.length}, minmax(0, 1fr))` }}
+              aria-label={`Progression : étape ${etape + 1} sur ${ETAPES.length}, ${ETAPES[etape]}`}
+            >
+              {ETAPES.map((nom, i) => (
+                <li
+                  key={nom}
+                  aria-current={i === etape ? "step" : undefined}
+                  className="flex flex-col gap-2"
+                >
+                  <span
+                    className={`h-1.5 rounded-full transition-colors ${i <= etape ? "bg-brand" : "bg-line-soft"}`}
+                  />
+                  <span
+                    className={`hidden text-[12px] font-semibold sm:block ${i === etape ? "text-brand" : i < etape ? "text-ink" : "text-grey"}`}
+                  >
+                    {nom}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </div>
 
-        {etape === 0 && <StepGenre initial={versEtape.genre(p)} onSubmit={(v) => enregistrer(v)} />}
-        {etape === 1 && (
-          <StepPhotos
-            initial={versEtape.photos(p)}
-            onBack={retour}
-            onSubmit={(v) => enregistrer(v)}
-          />
-        )}
-        {etape === 2 && (
-          <StepCorps
-            initial={versEtape.corps(p)}
-            onBack={retour}
-            onSubmit={(v) => enregistrer(versProfil.corps(p, v))}
-          />
-        )}
-        {etape === 3 && (
-          <StepMorpho
-            initial={versEtape.morpho(p)}
-            onBack={retour}
-            onSubmit={(v) => enregistrer(v)}
-          />
-        )}
-        {etape === 4 && (
-          <StepMarques
-            initial={versEtape.marques(p)}
-            onBack={retour}
-            onSubmit={(v) => enregistrer(v)}
-          />
-        )}
-        {etape === 5 && (
-          <StepContact
-            initial={versEtape.contact(p, session.email)}
-            onBack={retour}
-            onSubmit={(v) => enregistrer(v)}
-          />
-        )}
-        {etape === 6 && (
-          <StepComptes
-            onBack={retour}
-            onSubmit={async () => {
-              await enregistrer({ onboardingTermine: true }, false);
-              toast.success("Ton profil est prêt !");
-              router.push("/search");
-            }}
-          />
-        )}
-      </main>
+          {etape === 0 && (
+            <StepGenre initial={versEtape.genre(p)} onSubmit={(v) => enregistrer(v)} />
+          )}
+          {etape === 3 && (
+            <StepPhotos
+              initial={versEtape.photos(p)}
+              onBack={retour}
+              onSubmit={(v) => enregistrer(v)}
+            />
+          )}
+          {etape === 1 && (
+            <StepCorps
+              genre={p.genre}
+              initial={versEtape.corps(p)}
+              onBack={retour}
+              onSubmit={(v) => enregistrer(versProfil.corps(p, v))}
+            />
+          )}
+          {etape === 2 && (
+            <StepMorpho
+              initial={versEtape.morpho(p)}
+              mensurations={p.mensurations}
+              onBack={retour}
+              onSubmit={(v) => enregistrer(v)}
+            />
+          )}
+          {etape === 4 && (
+            <StepMarques
+              initial={versEtape.marques(p)}
+              onBack={retour}
+              onSubmit={(v) => enregistrer(v)}
+            />
+          )}
+          {etape === 5 && (
+            <StepContact
+              initial={versEtape.contact(p, session.email)}
+              onBack={retour}
+              onSubmit={(v) => enregistrer(v)}
+            />
+          )}
+          {etape === 6 && (
+            <StepComptes
+              onBack={retour}
+              onSubmit={async () => {
+                await enregistrer({ onboardingTermine: true }, false);
+                toast.success("Ton profil est prêt !");
+                router.push("/search");
+              }}
+            />
+          )}
+        </main>
+      </div>
     </div>
   );
 }

@@ -53,6 +53,8 @@ function dernierePhoto(photos: UserPhoto[], type: PhotoType): UserPhoto | undefi
 
 const isMannequin = (p: UserPhoto) =>
   p.type === "pied" && p.storagePath.split("/")[1] === "mannequin";
+/** Photos d'origine (visage, corps) qui servent à générer le mannequin : `<user>/sources/`. */
+const isSource = (p: UserPhoto) => p.storagePath.split("/")[1] === "sources";
 
 function versWebProfile(p: Profile, photos: UserPhoto[], comptes: MerchantAccountView[]) {
   const profil: WebProfile = {
@@ -61,10 +63,10 @@ function versWebProfile(p: Profile, photos: UserPhoto[], comptes: MerchantAccoun
     mannequinUrl: dernierePhoto(photos.filter(isMannequin), "pied")?.url ?? undefined,
     photoCorpsUrl:
       dernierePhoto(
-        photos.filter((photo) => !isMannequin(photo)),
+        photos.filter((photo) => !isMannequin(photo) && !isSource(photo)),
         "pied",
       )?.url ?? undefined,
-    photoTeteUrl: dernierePhoto(photos, "face")?.url ?? undefined,
+    photoTeteUrl: dernierePhoto(photos.filter((photo) => !isSource(photo)), "face")?.url ?? undefined,
     taille: p.taille,
     mensurations: p.mensurations,
     poidsKg: p.poidsKg ?? undefined,
@@ -103,9 +105,30 @@ async function envoyerPhoto(
   // Une seule photo par type : on supprime les précédentes (minimisation des données).
   await Promise.all(
     anciennes
-      .filter((p) => p.type === type && isMannequin(p) === mannequin)
+      .filter((p) => p.type === type && isMannequin(p) === mannequin && !isSource(p))
       .map((p) => deleteUserPhoto(p.id)),
   );
+}
+
+export type SourcePhoto = { id: string; type: PhotoType; url: string };
+
+/** Photos d'origine enregistrées (visage et corps), plus anciennes d'abord. */
+export async function listSourcePhotos(): Promise<SourcePhoto[]> {
+  return donnees(await listUserPhotos())
+    .filter((p) => isSource(p) && p.url)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    .map((p) => ({ id: p.id, type: p.type, url: p.url! }));
+}
+
+/** Enregistre une photo d'origine dans le bucket privé (dossier `sources/`). */
+export async function addSourcePhoto(file: File, type: PhotoType): Promise<SourcePhoto> {
+  const photo = donnees(await uploadUserPhoto(file, type, "sources"));
+  if (!photo.url) throw new Error("Photo enregistrée mais illisible.");
+  return { id: photo.id, type: photo.type, url: photo.url };
+}
+
+export async function removeSourcePhoto(id: string): Promise<void> {
+  donnees(await deleteUserPhoto(id));
 }
 
 const estNouvellePhoto = (v: string | undefined): v is string => !!v?.startsWith("data:");

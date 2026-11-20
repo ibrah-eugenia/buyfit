@@ -18,6 +18,11 @@ export const versEtape = {
     mensurations: p.mensurations as CorpsStep["mensurations"],
     poidsKg: p.poidsKg as number,
     pointure: p.taille.pointure ?? "",
+    tailles: {
+      haut: p.taille.haut ?? "",
+      veste: p.taille.veste ?? "",
+      bas: p.taille.bas ?? "",
+    },
   }),
   morpho: (p: WebProfile): { morphologie?: Morphologie } => ({
     morphologie: p.morphologie as Morphologie,
@@ -34,6 +39,6 @@ export const versProfil = {
   corps: (p: WebProfile, v: CorpsStep): Partial<WebProfile> => ({
     mensurations: v.mensurations,
     poidsKg: v.poidsKg,
-    taille: { ...p.taille, pointure: v.pointure },
+    taille: { ...p.taille, ...v.tailles, pointure: v.pointure },
   }),
 };

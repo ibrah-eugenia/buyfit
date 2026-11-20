@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { config } from "../config.js";
 import { HttpError } from "../errors.js";
+import {
+  analyzeGarment,
+  productRefs,
+  zoneFromName,
+  type GarmentAnalysis,
+  type ProductRefs,
+} from "./garment.js";
 import { db } from "./supabase.js";
 
 export const MAX_IMAGE = 8 * 1024 * 1024;
@@ -57,7 +64,12 @@ export async function modelImage(
   return image;
 }
 
-export async function accountTryOn(userId: string, garment: File | string) {
+export async function accountTryOn(
+  userId: string,
+  garment: File | string,
+  garmentName?: string,
+  productUrl?: string,
+) {
   const { data: avatar, error } = await db()
     .from("user_photos")
     .select("id,storage_path")
@@ -70,12 +82,27 @@ export async function accountTryOn(userId: string, garment: File | string) {
     .maybeSingle();
   if (error) throw new HttpError(502, "Impossible de lire ton profil.");
   if (!avatar) throw new HttpError(409, "Crée ton mannequin dans les réglages Photos de BuyFit.");
+  // Analyse du produit en parallèle du téléchargement du mannequin (~3 s, jamais bloquante).
+  // Photos de la fiche (packshot + photo portée), puis analyse IA sur la photo la plus nette.
+  const refs: Promise<ProductRefs | null> =
+    typeof garment === "string" ? productRefs(productUrl, garment) : Promise.resolve(null);
+  const analysis: Promise<GarmentAnalysis> =
+    typeof garment === "string"
+      ? refs.then((r) => analyzeGarment(r?.garment ?? garment, garmentName ?? ""))
+      : Promise.resolve({ zone: zoneFromName(garmentName ?? ""), description: garmentName ?? "" });
   const photo = await db().storage.from("user-photos").download(avatar.storage_path);
   if (photo.error || !photo.data) throw new HttpError(502, "Impossible de charger ton mannequin.");
   const form = new FormData();
   form.set("person", photo.data, "mannequin");
-  if (typeof garment === "string") form.set("garment_url", garment);
+  const ref = await refs;
+  if (typeof garment === "string") form.set("garment_url", ref?.garment ?? garment);
   else form.set("garment", garment, "garment");
+  if (ref?.look) form.set("look_url", ref.look);
+  // Nom du produit (« Zara - Pantalon chino - Beige clair ») : guide le modèle sur couleur et coupe.
+  if (garmentName) form.set("garment_name", garmentName.slice(0, 300));
+  const { zone, description } = await analysis;
+  form.set("garment_zone", zone);
+  if (description) form.set("garment_description", description.slice(0, 400));
   const start = Date.now();
   const image = await modelImage("/tryon/account", form);
   const latencyMs = Date.now() - start;
@@ -100,5 +127,5 @@ export async function accountTryOn(userId: string, garment: File | string) {
     await bucket.remove([path]);
     throw new HttpError(502, "Impossible d’enregistrer cet essayage.");
   }
-  return { resultImageUrl: signed.data.signedUrl, latencyMs };
+  return { resultImageUrl: signed.data.signedUrl, latencyMs, zone };
 }

@@ -317,7 +317,7 @@ function Checkout() {
               return (
                 <div
                   key={marchand}
-                  className="flex flex-col gap-3 rounded-2xl border border-line-soft p-4"
+                  className="flex flex-col gap-3 rounded-[24px] border border-ink/10 p-4"
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-bold">{marchand}</span>
@@ -456,7 +456,7 @@ function AdresseForm({
         void handleSubmit((v) => onSave(v, memoriser))(e);
       }}
       noValidate
-      className="grid gap-4 rounded-2xl border border-line-soft p-4 sm:grid-cols-2"
+      className="grid gap-4 rounded-[24px] border border-ink/10 p-4 sm:grid-cols-2"
       aria-label="Adresse de livraison"
     >
       <div className="flex flex-col gap-2 sm:col-span-2">

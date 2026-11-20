@@ -20,9 +20,9 @@ import { cn } from "@/lib/utils";
 
 const SECTIONS = [
   { id: "genre", label: "Genre" },
-  { id: "photos", label: "Photos" },
   { id: "corps", label: "Silhouette" },
   { id: "morpho", label: "Morphologie" },
+  { id: "photos", label: "Photos" },
   { id: "marques", label: "Budget et marques" },
   { id: "contact", label: "Contact et livraison" },
   { id: "comptes", label: "Comptes marchands" },
@@ -87,10 +87,10 @@ function Settings() {
                       el.scrollIntoView({ block: "nearest", inline: "nearest" });
                   }}
                   className={cn(
-                    "h-10 w-full rounded-[10px] px-3.5 text-left text-sm font-semibold whitespace-nowrap transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+                    "h-10 w-full rounded-full px-4 text-left text-sm font-semibold whitespace-nowrap transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
                     section === s.id
-                      ? "bg-blush text-brand-deep"
-                      : "text-grey hover:bg-linen hover:text-ink",
+                      ? "bg-ink text-white"
+                      : "text-copy hover:bg-linen hover:text-ink",
                   )}
                 >
                   {s.label}
@@ -113,13 +113,19 @@ function Settings() {
           )}
           {section === "corps" && (
             <StepCorps
+              genre={p.genre}
               {...commun}
               initial={versEtape.corps(p)}
               onSubmit={(v) => enregistrer(versProfil.corps(p, v))}
             />
           )}
           {section === "morpho" && (
-            <StepMorpho {...commun} initial={versEtape.morpho(p)} onSubmit={enregistrer} />
+            <StepMorpho
+              {...commun}
+              initial={versEtape.morpho(p)}
+              mensurations={p.mensurations}
+              onSubmit={enregistrer}
+            />
           )}
           {section === "marques" && (
             <StepMarques {...commun} initial={versEtape.marques(p)} onSubmit={enregistrer} />

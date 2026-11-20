@@ -10,6 +10,11 @@ import { config } from "../config.js";
 const HF_CHAT_URL = "https://router.huggingface.co/v1/chat/completions";
 /** Note minimale (sur 10) pour qu'un produit soit considéré comme la même pièce. */
 const MIN_SCORE = 6;
+/**
+ * Chaque magasin garde au moins son meilleur produit s'il atteint cette note (même type de
+ * vêtement) : on préfère montrer Zara et Uniqlo qu'un seul magasin.
+ */
+const MIN_SCORE_BEST_OF_STORE = 4;
 const IMAGE_TIMEOUT_MS = 4_000;
 const MODEL_TIMEOUT_MS = 20_000;
 
@@ -43,10 +48,18 @@ export async function filterBySimilarity(
       referenceDataUrl,
       usable.map((u) => u.img),
     );
-    const resultats = usable
+    const scored = usable
       .map(({ p }, i) => ({ ...p, score: Math.round(((scores[i] ?? 0) / 10) * 100) / 100 }))
-      .filter((p) => p.score * 10 >= MIN_SCORE)
       .sort((a, b) => b.score - a.score);
+    const bestOfStore = new Set(
+      [...new Map(scored.map((p) => [p.marque, p] as const).reverse()).values()]
+        .filter((p) => p.score * 10 >= MIN_SCORE_BEST_OF_STORE)
+        .map((p) => p.id),
+    );
+    let resultats = scored.filter((p) => p.score * 10 >= MIN_SCORE || bestOfStore.has(p.id));
+    // Rien d'assez proche : on montre quand même les 3 meilleurs s'ils sont du même type de
+    // vêtement (note ≥ 3), plutôt qu'un écran vide d'une recherche à l'autre.
+    if (!resultats.length) resultats = scored.filter((p) => p.score * 10 >= 3).slice(0, 3);
     console.info(
       `[similarity] ${resultats.length}/${usable.length} retenus en ${Date.now() - started} ms`,
       scores,
@@ -77,6 +90,8 @@ async function scoreImages(reference: string, images: string[]): Promise<number[
       model: config.HF_VISION_MODEL,
       max_tokens: 120,
       temperature: 0,
+      top_p: 1,
+      seed: 7,
       messages: [{ role: "user", content }],
     }),
     signal: AbortSignal.timeout(MODEL_TIMEOUT_MS),
@@ -86,13 +101,18 @@ async function scoreImages(reference: string, images: string[]): Promise<number[
   return parseScores(json.choices?.[0]?.message?.content ?? "", images.length);
 }
 
-/** {"scores":[8,3,…]} → nombres bornés 0–10 ; erreur si le compte ne correspond pas. */
+/**
+ * {"scores":[8,3,…]} → nombres bornés 0–10. Le modèle oublie parfois une note (11 pour 12) :
+ * on complète par 0 (produit écarté) plutôt que de jeter tout le filtre ; erreur seulement si
+ * moins de la moitié des notes est revenue.
+ */
 export function parseScores(text: string, n: number): number[] {
   const raw = text.match(/\[[\d\s.,]*\]/)?.[0];
   const arr = raw ? (JSON.parse(raw) as unknown[]) : [];
-  const scores = arr.map((v) => Math.min(10, Math.max(0, Number(v) || 0)));
-  if (scores.length !== n)
+  const scores = arr.slice(0, n).map((v) => Math.min(10, Math.max(0, Number(v) || 0)));
+  if (scores.length < Math.ceil(n / 2))
     throw new Error(`Notes inattendues (${scores.length}/${n}) : ${text.slice(0, 120)}`);
+  while (scores.length < n) scores.push(0);
   return scores;
 }
 

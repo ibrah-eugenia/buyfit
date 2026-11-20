@@ -6,7 +6,7 @@ import base64
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
-from threading import Lock
+from threading import Lock, BoundedSemaphore
 from time import monotonic
 
 from fastapi import FastAPI, Request, UploadFile, File, Form
@@ -15,13 +15,22 @@ from fastapi.responses import JSONResponse, FileResponse, RedirectResponse, Resp
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from model_client import KontextModel, download_image, HuggingFaceModel, LocalGradioModel, ModelError, ModelTimeout, describe_failure, validate_image_url
+from qwen_edit import QwenEditModel
 from results import ResultStore
 
 
 MODE = os.getenv("TRYON_MODE", "local")
 HOSTS = {h.strip().lower() for h in os.getenv("TRYON_IMAGE_HOSTS", "i.pinimg.com,images.unsplash.com").split(",") if h.strip()}
 SPACE = os.getenv("HF_SPACE_ID", "yisol/IDM-VTON")
+# qwen : Qwen-Image-Edit-2511 (mannequin + essayage) ; legacy : FLUX Kontext + IDM-VTON.
+ENGINE = os.getenv("TRYON_ENGINE", "qwen")
+BROWSER_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36",
+    "Accept": "image/webp,image/jpeg,image/png;q=0.9",  # jamais AVIF (non géré)
+}
 lock = Lock()
+# Le mannequin se génère en 3 poses en parallèle : sémaphore séparé de l'essayage.
+avatar_slots = BoundedSemaphore(3)
 DIRECTORY = Path(__file__).resolve().parent
 exports = ResultStore(DIRECTORY / ".results")
 logger = logging.getLogger("buyfit.tryon")
@@ -137,6 +146,8 @@ def get_model(request: Request):
             if not url:
                 raise ModelError("Aucun moteur local configuré. Installer et lancer IDM-VTON, puis définir TRYON_LOCAL_URL (ex. http://127.0.0.1:7860). Le serveur HTTP seul ne génère pas d'essayage.")
             request.app.state.model = LocalGradioModel(url, HOSTS)
+        elif ENGINE == "qwen":
+            request.app.state.model = QwenEditModel(os.getenv("HF_TOKEN"))
         else:
             request.app.state.model = HuggingFaceModel(SPACE, os.getenv("HF_TOKEN"), HOSTS)
     return request.app.state.model
@@ -216,33 +227,55 @@ def tryon_upload(
     return run_generation(generate, request)
 
 @app.post("/avatar")
-def avatar(request: Request, person: UploadFile = File()):
+def avatar(request: Request, person: UploadFile = File(), face: UploadFile | None = File(None),
+           pose: int = Form(0, ge=0, le=2), body: str | None = Form(None, max_length=400)):
     """Normalize a standing photo using the official FLUX.1 Kontext Space."""
     if MODE != "huggingface":
         return JSONResponse({"error": "La création du mannequin nécessite TRYON_MODE=huggingface."}, status_code=503)
     try:
         photo = read_upload(person)
+        face_photo = read_upload(face) if face else None
     except ValueError as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
     finally:
         person.file.close()
-    if not lock.acquire(blocking=False):
+        if face:
+            face.file.close()
+    if not avatar_slots.acquire(blocking=False):
         return JSONResponse({"error": "Une génération est en cours. Réessaie dans un instant."}, status_code=503)
     try:
         if request.app.state.avatar_model is None:
-            request.app.state.avatar_model = KontextModel(os.getenv("HF_TOKEN"))
-        data, mime = request.app.state.avatar_model.avatar(photo)
+            request.app.state.avatar_model = (
+                QwenEditModel(os.getenv("HF_TOKEN")) if ENGINE == "qwen" else KontextModel(os.getenv("HF_TOKEN"))
+            )
+        model = request.app.state.avatar_model
+        data, mime = (
+            model.avatar(photo, face_photo, pose, body) if isinstance(model, QwenEditModel) else model.avatar(photo)
+        )
         return Response(data, media_type=mime)
     except Exception as exc:
         failure = describe_failure(exc)
         return JSONResponse({"error": str(failure)}, status_code=504 if isinstance(failure, ModelTimeout) else 502)
     finally:
-        lock.release()
+        avatar_slots.release()
+
+
+def _optional_image(url: str | None):
+    """Photo portée de la fiche produit : bonus, l'essayage continue sans si elle ne charge pas."""
+    if not url:
+        return None
+    try:
+        return download_image(url, HOSTS, headers=BROWSER_HEADERS)
+    except Exception:
+        return None
 
 
 @app.post("/tryon/account")
 def account_tryon(request: Request, person: UploadFile = File(), garment: UploadFile | None = File(None),
-                  garment_url: str | None = Form(None)):
+                  garment_url: str | None = Form(None), garment_name: str | None = Form(None, max_length=300),
+                  garment_zone: str | None = Form(None, max_length=20),
+                  garment_description: str | None = Form(None, max_length=400),
+                  look_url: str | None = Form(None, max_length=4096)):
     """Private server-to-server path. The API supplies the account's approved mannequin."""
     if MODE == "mock":
         return JSONResponse({"error": "Active un moteur réel pour essayer ce vêtement."}, status_code=503)
@@ -253,6 +286,8 @@ def account_tryon(request: Request, person: UploadFile = File(), garment: Upload
         garment_image = read_upload(garment) if garment else None
         if garment_url:
             validate_image_url(garment_url, HOSTS)
+        if look_url:
+            validate_image_url(look_url, HOSTS)
     except ValueError as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
     finally:
@@ -263,8 +298,17 @@ def account_tryon(request: Request, person: UploadFile = File(), garment: Upload
         return JSONResponse({"error": "Un essayage est déjà en cours."}, status_code=503)
     try:
         if garment_image is None:
-            garment_image = download_image(garment_url, HOSTS)
-        image = get_model(request).generate_images(mannequin, garment_image)
+            # Les CDN marchands (Zara) refusent les clients sans en-tête de navigateur (HTTP 403).
+            garment_image = download_image(garment_url, HOSTS, headers=BROWSER_HEADERS)
+        model = get_model(request)
+        image = (
+            model.generate_images(
+                mannequin, garment_image, garment_name, garment_zone, garment_description,
+                _optional_image(look_url),
+            )
+            if isinstance(model, QwenEditModel)
+            else model.generate_images(mannequin, garment_image)
+        )
         header, encoded = image.split(",", 1)
         return Response(base64.b64decode(encoded, validate=True), media_type=header[5:-7])
     except Exception as exc:

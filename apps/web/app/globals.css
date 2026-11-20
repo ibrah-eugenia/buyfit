@@ -15,6 +15,8 @@
   --color-copy: #333333;
   --color-grey: #6b6b6b;
   --color-linen: #f7f5f2;
+  /* Fond « toile » gris chaud sur lequel sont posés les cadres blancs arrondis */
+  --color-canvas: #e7e5e2;
   --color-line: #e6e2dc;
   --color-line-soft: #efece8;
   --color-success: #2f6b3f;
@@ -24,6 +26,7 @@
 
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-heading: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-instrument-serif), ui-serif, Georgia, serif;
 
   /* Échelle typo de la charte : titre 36, sous-titre 20, texte 15, légende 12 */
   --text-display: 36px;
@@ -119,7 +122,57 @@
   .no-scrollbar {
     scrollbar-width: none;
   }
+  /* Animations décoratives de la landing (coupées si l'utilisateur réduit les animations). */
+  .landing-float {
+    animation: landing-float 6s ease-in-out infinite;
+  }
+  .landing-float-delayed {
+    animation: landing-float 6s ease-in-out 1.5s infinite;
+  }
+  .landing-pulse {
+    animation: landing-pulse 1.6s ease-in-out infinite;
+  }
+  .landing-marquee {
+    animation: landing-marquee 40s linear infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .landing-marquee,
+    .landing-float,
+    .landing-float-delayed,
+    .landing-pulse {
+      animation: none;
+    }
+  }
   .no-scrollbar::-webkit-scrollbar {
     display: none;
+  }
+}
+
+@keyframes landing-float {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -8px;
+  }
+}
+
+@keyframes landing-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes landing-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
   }
 }

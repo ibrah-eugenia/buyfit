@@ -14,9 +14,13 @@ export type StepProps<T> = {
 
 export function StepHeader({ title, description }: { title: string; description?: string }) {
   return (
-    <div className="mb-6 flex flex-col gap-1.5">
-      <h2 className="text-[24px] font-bold tracking-[-0.02em] sm:text-[28px]">{title}</h2>
-      {description && <p className="text-body text-grey">{description}</p>}
+    <div className="mb-8 flex flex-col gap-3">
+      <h2 className="font-display text-[40px] leading-[1] tracking-[-0.02em] text-ink sm:text-[52px]">
+        {title}
+      </h2>
+      {description && (
+        <p className="text-[17px] leading-relaxed font-light text-ink">{description}</p>
+      )}
     </div>
   );
 }
@@ -69,7 +73,7 @@ export function ChoiceCard({
 }) {
   return (
     <label
-      className={`flex cursor-pointer items-center justify-center rounded-xl border px-3 py-3 text-center text-sm font-semibold transition-colors has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50 ${
+      className={`flex cursor-pointer items-center justify-center rounded-2xl border px-3 py-4 text-center text-sm font-semibold transition-colors has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50 ${
         checked
           ? "border-[1.5px] border-brand bg-blush font-bold text-brand-deep"
           : "border-input bg-white text-ink hover:bg-linen"
