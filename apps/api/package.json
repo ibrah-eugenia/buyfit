@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "h:agents": "tsx --env-file-if-exists=../../.env scripts/h-agents.ts",
     "h:order-test": "tsx --env-file-if-exists=../../.env scripts/h-order-test.ts",
+    "h:last-session": "tsx --env-file-if-exists=../../.env scripts/h-last-session.ts",
     "h:vault-add": "tsx --env-file-if-exists=../../.env scripts/h-vault-add.ts",
     "bd:lens": "tsx --env-file-if-exists=../../.env scripts/bd-lens.ts",
     "bd:capture-test": "tsx --env-file-if-exists=../../.env scripts/bd-capture-test.ts"

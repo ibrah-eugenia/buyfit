@@ -41,6 +41,7 @@ export function Results({
   const meta = {
     ...(item?.genre ? { genre: item.genre } : {}),
     ...(item?.categorie ? { categorie: item.categorie } : {}),
+    ...(item?.couleur ? { couleur: item.couleur } : {}),
   };
   // Entre deux tailles (« M/L » dans le compte) : l'agent prend la première, l'autre reste affichée.
   const mainSize = size?.split("/")[0] || null;

@@ -21,7 +21,7 @@ import { api } from "./api";
 const POLL_MS = 2500;
 
 /** Pièce identifiée : genre et catégorie pour l'équivalence de taille (L → 52–54). */
-export type PieceMeta = Pick<IdentifiedItem, "genre" | "categorie">;
+export type PieceMeta = Pick<IdentifiedItem, "genre" | "categorie" | "couleur">;
 
 export interface Purchase {
   product: ProductMatch;
@@ -117,6 +117,7 @@ export async function startPurchase(
         productUrl: product.url,
         taille: size,
         ...opts,
+        ...(meta.couleur ? { couleur: meta.couleur } : {}),
       }),
     );
     timer = setInterval(() => {

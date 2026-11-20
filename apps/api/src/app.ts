@@ -35,6 +35,7 @@ import {
 } from "./modules/hcompany.js";
 import {
   createOrder,
+  findMerchantAccount,
   getOrder,
   getProfile,
   updateOrder,
@@ -272,9 +273,17 @@ app.post("/tryon", fittingLimit, async (c) => {
 // POST /order → OrderStatus (lance l'agent H Company)
 app.post("/order", async (c) => {
   const req = await body(c, OrderRequestSchema);
-  const profile = await requireProfile(req.userId);
-  const host = new URL(req.productUrl).hostname;
-  const compte = profile.comptesMarchands.find((m) => host.endsWith(m.domaine));
+  await requireProfile(req.userId);
+  const host = new URL(req.productUrl).hostname.replace(/^www\./, "");
+  // Sans compte relié, l'agent remplirait un panier invité dans SON navigateur cloud : l'article
+  // n'apparaîtrait jamais dans le panier de l'utilisateur. On refuse donc avant de lancer l'agent.
+  const compte = await call("supabase", () => findMerchantAccount(req.userId, host));
+  if (!compte?.vaultId && !config.mocks.hcompany) {
+    throw new HttpError(
+      409,
+      `Relie ton compte ${host} dans les Réglages BuyFit : l'agent s'y connecte pour ajouter l'article à TON panier.`,
+    );
+  }
 
   const session = await call("hcompany", () =>
     startOrderSession({
@@ -284,6 +293,7 @@ app.post("/order", async (c) => {
         ...(req.genre ? { genre: req.genre } : {}),
         ...(req.categorie ? { categorie: req.categorie } : {}),
       }),
+      ...(req.couleur ? { couleur: req.couleur } : {}),
       ...(compte ? { compte } : {}),
     }),
   );

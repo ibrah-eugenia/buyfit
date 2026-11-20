@@ -10,6 +10,9 @@ export const OrderRequestSchema = z.object({
   /** Pièce identifiée : sert à traduire la taille lettre en taille numérique (L → 52–54). */
   genre: z.enum(["homme", "femme", "mixte"]).optional(),
   categorie: z.string().max(60).optional(),
+  /** Couleur de la pièce identifiée (« bleu marine ») : l'URL trouvée pointe parfois vers un
+   * autre coloris (colorDisplayCode=39 marron), l'agent doit sélectionner le bon. */
+  couleur: z.string().max(60).optional(),
 });
 export type OrderRequest = z.infer<typeof OrderRequestSchema>;
 
