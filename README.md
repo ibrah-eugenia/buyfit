@@ -33,20 +33,14 @@ La plateforme web garde le profil (tailles, budget, marques, photos), l'historiq
 essayages et commandes, et relie les comptes marchands **sans jamais stocker de mot de passe** :
 les identifiants vont dans un coffre H Company propre à chaque utilisateur.
 
-## Prototype
-
-| Quoi                    | Lien                                                  |
-| ----------------------- | ----------------------------------------------------- |
-| Plateforme web          | _À COMPLÉTER : URL du site déployé_                   |
-| API (Railway)           | _À COMPLÉTER : URL Railway_ (`/health` pour vérifier) |
-| Extension Chrome (.zip) | _À COMPLÉTER : lien vers la release GitHub_           |
-| Vidéo de démo           | _À COMPLÉTER_                                         |
-
 ## Comment tester (≈ 5 min)
 
-**Sans rien installer : la plateforme web**
+Prérequis : `pnpm install` et un fichier `.env` (voir [Prérequis](#prérequis)).
 
-1. Ouvrir la plateforme web (lien ci-dessus) et **créer un compte** (email + mot de passe).
+**La plateforme web**
+
+1. `pnpm --filter @buyfit/web dev`, puis ouvrir http://localhost:3000 et **créer un compte**
+   (email + mot de passe).
 2. Suivre l'onboarding : genre, photo plein pied, silhouette, marques et budget, livraison.
 3. Dans **Réglages**, relier un compte marchand : seuls des identifiants de référence sont
    enregistrés chez nous, le mot de passe part dans un coffre H Company.
@@ -54,9 +48,9 @@ les identifiants vont dans un coffre H Company propre à chaque utilisateur.
 
 **Le parcours complet avec l'extension**
 
-1. Télécharger l'extension (.zip ci-dessus) et la décompresser.
+1. `pnpm build:ext` (et `pnpm dev:api` pour l'API, ou `WXT_USE_MOCK_API=true` pour la simuler).
 2. `chrome://extensions` → activer le **Mode développeur** → **Charger l'extension non
-   empaquetée** → choisir le dossier décompressé.
+   empaquetée** → choisir `apps/extension/.output/chrome-mv3`.
 3. Aller sur [pinterest.com](https://www.pinterest.com), clic droit sur une tenue →
    **« Trouver ce look avec BuyFit »**.
 4. Le panneau latéral affiche les équivalents : **Essayer** pour l'essayage, **Acheter** pour
