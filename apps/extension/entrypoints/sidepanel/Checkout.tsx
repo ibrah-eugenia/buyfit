@@ -8,6 +8,7 @@ import {
   retryWithSize,
   type Purchase,
 } from "@/lib/purchase";
+import { cartUrl } from "@/lib/stores";
 
 const SIZES = ["XS", "S", "M", "L", "XL", "XXL"];
 const formatPrice = (prix: number, devise: string) =>
@@ -17,8 +18,10 @@ import { Spinner } from "./Spinner";
 type StepState = "todo" | "active" | "waiting" | "done";
 
 /**
- * Suivi de l'achat par l'agent H Company. L'agent travaille dans un onglet en arrière-plan ;
- * ici l'utilisateur répond aux pauses : livraison, paiement, puis validation bancaire si demandée.
+ * Suivi de l'agent H Company qui ajoute l'article au panier du compte marchand. L'agent
+ * travaille dans un onglet en arrière-plan ; une fois l'article au panier, l'utilisateur
+ * ouvre son panier et paie lui-même (authentification forte de sa banque).
+ * (Les pauses livraison / paiement / banque viennent de l'ancien parcours d'achat complet.)
  */
 export function Checkout({ purchase }: { purchase: Purchase }) {
   const { product, size, order, error, sending } = purchase;
@@ -29,6 +32,8 @@ export function Checkout({ purchase }: { purchase: Purchase }) {
 
   const step = pendingStep(purchase);
   const done = order?.statut === "commandee";
+  const inCart = order?.statut === "au_panier";
+  const loginNeeded = order?.statut === "echec" && order.motif === "connexion";
   const failed = order?.statut === "echec" || (error !== null && !order);
   const etape = order?.statut === "confirmation_requise" ? order.etape : undefined;
   const reached = (e: "livraison" | "paiement" | "banque") => {
@@ -54,11 +59,16 @@ export function Checkout({ purchase }: { purchase: Purchase }) {
         : purchase.paymentDone
           ? "active"
           : "todo";
-  const steps: { label: string; state: StepState }[] = [
-    { label: "Page produit, panier, commande", state: cart },
-    { label: "Livraison", state: delivery },
-    { label: step === "banque" ? "Validation bancaire" : "Paiement", state: payment },
-  ];
+  const steps: { label: string; state: StepState }[] = step
+    ? [
+        { label: "Page produit, panier, commande", state: cart },
+        { label: "Livraison", state: delivery },
+        { label: step === "banque" ? "Validation bancaire" : "Paiement", state: payment },
+      ]
+    : [
+        { label: "Ouverture de la fiche produit", state: order ? "done" : "active" },
+        { label: `Taille ${size} et ajout au panier`, state: order ? "active" : "todo" },
+      ];
 
   const options = order?.livraisons ?? [];
   const terminal = isTerminal(purchase) || failed;
@@ -78,7 +88,29 @@ export function Checkout({ purchase }: { purchase: Purchase }) {
           </div>
         </div>
 
-        {done ? (
+        {inCart ? (
+          <div className="status success">
+            <div className="success-icon" aria-hidden="true">
+              <CheckIcon />
+            </div>
+            <h2>Ajouté à ton panier {product.marque}</h2>
+            {order?.message && <p>{order.message}</p>}
+            {order?.total && <p>Prix affiché : {order.total}</p>}
+            <p>Ouvre ton panier pour finaliser le paiement en un clic.</p>
+          </div>
+        ) : loginNeeded ? (
+          <div className="status stock">
+            <div className="stock-icon" aria-hidden="true">
+              <ShieldIcon />
+            </div>
+            <h2>Connexion {product.marque} requise</h2>
+            <p>
+              Le site demande de se connecter : l'agent ne saisit jamais de mot de passe. Ajoute
+              l'article toi-même, en taille {size}
+              {purchase.sizeEquivalent && <> ({purchase.sizeEquivalent})</>}.
+            </p>
+          </div>
+        ) : done ? (
           <div className="status success">
             <div className="success-icon" aria-hidden="true">
               <CheckIcon />
@@ -92,10 +124,10 @@ export function Checkout({ purchase }: { purchase: Purchase }) {
             <div className="stock-icon" aria-hidden="true">
               <ShieldIcon />
             </div>
-            <h2>{product.marque} bloque les achats automatiques</h2>
+            <h2>{product.marque} bloque les agents</h2>
             <p>
               Le site a affiché une vérification anti-robot : l'agent s'est arrêté sans la
-              contourner. Finis l'achat toi-même, en taille {size}
+              contourner. Ajoute l'article toi-même, en taille {size}
               {purchase.sizeEquivalent && <> ({purchase.sizeEquivalent})</>}.
             </p>
           </div>
@@ -128,10 +160,26 @@ export function Checkout({ purchase }: { purchase: Purchase }) {
             </div>
           </div>
         ) : failed ? (
-          <div className="status">
+          <div className="status stock">
+            <div className="stock-icon" aria-hidden="true">
+              <ShieldIcon />
+            </div>
+            <h2>Ajout au panier interrompu</h2>
             <p className="error">
-              {order?.message ?? error ?? "L'agent n'a pas pu terminer la commande."}
+              {order?.message ??
+                error ??
+                "L'agent s'est arrêté sans donner de raison. Regarde son parcours pour voir où il a bloqué."}
             </p>
+            {order?.agentViewUrl && (
+              <a
+                className="link-btn agent-link"
+                href={order.agentViewUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Voir ce qu'a fait l'agent ↗
+              </a>
+            )}
           </div>
         ) : (
           <>
@@ -244,7 +292,21 @@ export function Checkout({ purchase }: { purchase: Purchase }) {
           >
             {sending ? <Spinner light /> : "J'ai validé dans mon appli"}
           </button>
-        ) : siteBlocked ? (
+        ) : inCart ? (
+          <div className="actions-row">
+            <button type="button" className="btn secondary" onClick={clearPurchase}>
+              Autre article
+            </button>
+            <a
+              className="btn primary"
+              href={cartUrl(product.marque, product.url)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Ouvrir mon panier
+            </a>
+          </div>
+        ) : siteBlocked || loginNeeded ? (
           <div className="actions-row">
             <button type="button" className="btn secondary" onClick={clearPurchase}>
               Autre article
@@ -264,7 +326,16 @@ export function Checkout({ purchase }: { purchase: Purchase }) {
               disabled={!newSize}
               onClick={() => newSize && retryWithSize(newSize)}
             >
-              {newSize ? `Acheter en ${newSize}` : "Choisis une taille"}
+              {newSize ? `Ajouter en ${newSize}` : "Choisis une taille"}
+            </button>
+          </div>
+        ) : failed ? (
+          <div className="actions-row">
+            <button type="button" className="btn secondary" onClick={clearPurchase}>
+              Retour aux résultats
+            </button>
+            <button type="button" className="btn primary" onClick={() => retryWithSize(size)}>
+              Réessayer
             </button>
           </div>
         ) : terminal ? (
@@ -284,25 +355,28 @@ export function Checkout({ purchase }: { purchase: Purchase }) {
 /** Bandeau compact quand l'écran d'achat est masqué. */
 export function PurchaseBanner({ purchase, onShow }: { purchase: Purchase; onShow: () => void }) {
   const step = pendingStep(purchase);
-  const done = purchase.order?.statut === "commandee";
+  const inCart = purchase.order?.statut === "au_panier";
+  const done = purchase.order?.statut === "commandee" || inCart;
   const failed = purchase.order?.statut === "echec";
   const outOfStock = failed && purchase.order?.motif === "rupture";
   const siteBlocked = failed && purchase.order?.motif === "site_bloque";
-  const label = done
-    ? "Commande validée"
-    : outOfStock
-      ? "Rupture de stock"
-      : siteBlocked
-        ? `Finis l'achat sur ${purchase.product.marque}`
-        : failed
-          ? "Commande interrompue"
-          : step === "livraison"
-            ? "Choisis ta livraison"
-            : step === "paiement"
-              ? "Confirme le paiement"
-              : step === "banque"
-                ? "Valide dans ton appli bancaire"
-                : "Achat en cours…";
+  const label = inCart
+    ? "Ajouté au panier ✓"
+    : done
+      ? "Commande validée"
+      : outOfStock
+        ? "Rupture de stock"
+        : siteBlocked
+          ? `Finis l'achat sur ${purchase.product.marque}`
+          : failed
+            ? "Commande interrompue"
+            : step === "livraison"
+              ? "Choisis ta livraison"
+              : step === "paiement"
+                ? "Confirme le paiement"
+                : step === "banque"
+                  ? "Valide dans ton appli bancaire"
+                  : "Ajout au panier en cours…";
   return (
     <button type="button" className={`purchase-banner${step ? " attention" : ""}`} onClick={onShow}>
       {!step && !done && !failed ? <Spinner /> : <span className="banner-dot" aria-hidden="true" />}

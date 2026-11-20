@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Clock, Hand, Loader2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, Hand, Loader2, ShoppingBag } from "lucide-react";
 import type { OrderStatut } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -13,6 +13,7 @@ export const STATUTS: Record<
     className: "bg-warning-soft text-warning",
     icon: Hand,
   },
+  au_panier: { label: "Au panier", className: "bg-success-soft text-success", icon: ShoppingBag },
   commandee: { label: "Commandée", className: "bg-success-soft text-success", icon: CheckCircle2 },
   echec: { label: "Échec", className: "bg-destructive/10 text-destructive", icon: AlertTriangle },
 };

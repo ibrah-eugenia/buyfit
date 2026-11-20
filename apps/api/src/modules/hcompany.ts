@@ -2,6 +2,13 @@
  * Agent computer-use H Company (SDK `hai-agents`, région EU par défaut).
  * Clé : variable d'env HAI_API_KEY. Doc : https://hub.hcompany.ai/agents-api/introduction
  *
+ * PARCOURS ACTUEL : ajout au panier. L'agent ouvre la fiche, choisit la taille, ajoute au
+ * panier, vérifie le panier et s'arrête (`{ etape: "added_to_cart" }` → statut `au_panier`).
+ * Le paiement reste à l'utilisateur (authentification forte DSP2). Connexion : profil de
+ * navigateur H par défaut (cookies sauvegardés en fin de session) → l'utilisateur se connecte
+ * une fois dans la vue agent, aucun mot de passe ne passe par BuyFit.
+ *
+ * Ancien parcours d'achat complet (fonctions chooseDelivery / confirmOrder ci-dessous) :
  * Parcours en 3 tours, l'agent s'arrête deux fois pour l'utilisateur (session restée `idle`) :
  * 1. Page produit → taille → panier → passer commande, arrêt sur le choix de livraison :
  *    `{ etape: "delivery_choice", livraisons }` → `confirmation_requise` / étape `livraison`.
@@ -37,9 +44,16 @@ export const OrderAnswerSchema = z.object({
   // Valeurs en anglais simple : le modèle Holo n'arrive pas à écrire « bloque » (il produit
   // « berge » en boucle, session du 17/11/2026 : 400 événements perdus).
   etape: z
-    .enum(["delivery_choice", "ready_to_pay", "bank_validation", "order_placed", "blocked"])
+    .enum([
+      "added_to_cart",
+      "delivery_choice",
+      "ready_to_pay",
+      "bank_validation",
+      "order_placed",
+      "blocked",
+    ])
     .describe(
-      "delivery_choice = stopped on the delivery method choice; ready_to_pay = stopped right before the final payment; bank_validation = the bank asks the user to approve the payment (3-D Secure, banking app); order_placed = payment done; blocked = cannot continue",
+      "added_to_cart = the item is in the cart (checked on the cart page); delivery_choice = stopped on the delivery method choice; ready_to_pay = stopped right before the final payment; bank_validation = the bank asks the user to approve the payment (3-D Secure, banking app); order_placed = payment done; blocked = cannot continue",
     ),
   livraisons: z
     .array(
@@ -73,6 +87,8 @@ export interface StartOrderInput {
   taille: string;
   /** Tailles numériques équivalentes (ex. ["52", "54"] pour L en veste homme). */
   equivalents?: string[];
+  /** Couleur voulue (« bleu marine ») : peut différer du coloris pointé par l'URL. */
+  couleur?: string;
   compte?: CompteMarchand;
 }
 
@@ -97,7 +113,64 @@ const MOTIFS: Record<string, OrderMotif> = {
   other: "autre",
 };
 
-const orderPrompt = ({ productUrl, taille, equivalents = [], compte }: StartOrderInput) =>
+/**
+ * Connexion au compte marchand de l'utilisateur AVANT l'ajout au panier : un panier invité reste
+ * dans le navigateur cloud de H et n'apparaît jamais chez l'utilisateur. Les identifiants sont
+ * dans le vault de la session : l'agent les fait taper par H (`fill_secret_at`) sans les voir.
+ */
+const loginSteps = (compte: CompteMarchand, productUrl: string) => [
+  `ÉTAPE 1 — CONNEXION (obligatoire) : l'article doit arriver dans le panier du compte ${compte.marchand} de l'utilisateur, pas dans un panier invité.`,
+  "Depuis cette page, ouvre la page de connexion du site (lien « Se connecter », « Connexion », « Mon compte » ou icône de profil en haut de page).",
+  "Remplis l'email (ou l'identifiant) et le mot de passe avec les identifiants enregistrés pour ce site (action fill_secret_at), puis valide.",
+  "Ne crée jamais de compte et n'invente aucun identifiant.",
+  "Vérifie que tu es bien connecté (nom du compte, « Mon compte », « Bonjour… »). Si tu l'étais déjà, passe directement à l'étape 2.",
+  "Si la connexion échoue (identifiants refusés, aucun identifiant proposé, code de vérification par email ou SMS demandé), arrête-toi : réponds avec etape=blocked, motif=login_failed et explique ce qui bloque dans raison.",
+  `ÉTAPE 2 — AJOUT AU PANIER, toujours connecté : reviens sur la page produit ${productUrl}.`,
+];
+
+const cartPrompt = ({ productUrl, taille, equivalents = [], couleur, compte }: StartOrderInput) =>
+  [
+    `Va sur la page produit ${productUrl}.`,
+    "Si une bannière de cookies s'affiche, refuse les cookies non essentiels.",
+    // Les sites protégés (Akamai…) renvoient parfois un « Access Denied » passager au 1er
+    // chargement : un seul rechargement, sans rien contourner.
+    "Si la page affiche « Access Denied » ou une erreur de chargement, attends 5 secondes et recharge-la UNE seule fois avant de conclure à un blocage.",
+    ...(compte?.vaultId ? loginSteps(compte, productUrl) : []),
+    ...(couleur
+      ? [
+          `COULEUR : l'utilisateur veut cet article en ${couleur}. Regarde le coloris sélectionné sur la page (libellé « Couleur : … » et photo).`,
+          `S'il ne correspond pas à ${couleur}, clique sur la pastille du coloris le plus proche de ${couleur} AVANT de choisir la taille, et vérifie que le libellé a changé.`,
+          `Si aucun coloris proche de ${couleur} n'existe, garde le coloris affiché et précise-le dans le résumé.`,
+        ]
+      : []),
+    `Clique sur le bouton de la taille "${taille}" pour la sélectionner (fais défiler si besoin).`,
+    "Ne juge la disponibilité qu'APRÈS avoir cliqué sur la taille : tant qu'aucune taille n'est sélectionnée, certains sites affichent « Me notifier » ou un bouton grisé.",
+    ...(equivalents.length
+      ? [
+          `Si le site affiche des tailles numériques au lieu de lettres, prends l'équivalent de ${taille} : ${equivalents.join(" ou ")} (la première disponible).`,
+        ]
+      : []),
+    "Clique sur « Ajouter au panier » (ou équivalent).",
+    "Ouvre ensuite le panier et vérifie que l'article y figure dans la bonne taille.",
+    ...(compte?.vaultId
+      ? [
+          "Vérifie aussi sur la page panier que tu es toujours connecté au compte. Si tu as été déconnecté, reconnecte-toi puis revérifie le panier.",
+        ]
+      : []),
+    "Réponds alors avec etape=added_to_cart, un résumé court (article, couleur, taille) et le prix affiché dans prixTotal. N'écris dans le résumé aucun identifiant de compte (code-barres, numéro membre, email).",
+    "Ne passe PAS commande, ne va pas jusqu'au paiement, ne saisis aucune autre information personnelle (adresse, carte…).",
+    ...(compte?.vaultId
+      ? []
+      : [
+          "Si le site demande de se connecter pour ajouter au panier, ne saisis rien : réponds avec etape=blocked et motif=login_failed.",
+        ]),
+    "Si, une fois la taille cliquée, elle est barrée ou indiquée en rupture de stock, réponds avec etape=blocked et motif=out_of_stock.",
+    "Si le site affiche un CAPTCHA, une vérification anti-robot, ou un accès refusé qui persiste après ce rechargement, ne tente PAS de le résoudre ni de le contourner :",
+    "réponds avec etape=blocked et motif=bot_blocked.",
+  ].join("\n");
+
+/** Ancien prompt d'achat complet (jusqu'au paiement). */
+export const orderPrompt = ({ productUrl, taille, equivalents = [], compte }: StartOrderInput) =>
   [
     `Va sur la page produit ${productUrl}.`,
     `Sélectionne la taille "${taille}" et ajoute l'article au panier.`,
@@ -141,8 +214,8 @@ const BANK_DONE_PROMPT = [
   "Réponds avec etape=order_placed et le numéro de commande, ou etape=blocked si le paiement est refusé.",
 ].join("\n");
 
-/** Plafond d'actions par session : un achat complet en demande ~40 à 60. */
-const MAX_STEPS = 100;
+/** Plafond d'actions par session : connexion (~10) + ajout au panier (~15 à 30). */
+const MAX_STEPS = 80;
 
 /** Sessions dont la livraison est choisie (le 2e tour n'a peut-être pas encore démarré). */
 const deliveryChosen = new Set<string>();
@@ -159,11 +232,6 @@ type MockSession = {
   site?: string;
 };
 const mockSessions = new Map<string, MockSession>();
-const MOCK_LIVRAISONS: LivraisonOption[] = [
-  { id: "standard", label: "Livraison standard", prix: "Gratuit", delai: "3 à 5 jours ouvrés" },
-  { id: "express", label: "Livraison express", prix: "6,95 €", delai: "24 h" },
-  { id: "relais", label: "Point relais", prix: "2,95 €", delai: "2 à 4 jours ouvrés" },
-];
 
 export async function startOrderSession(input: StartOrderInput): Promise<SessionInfo> {
   if (config.mocks.hcompany) {
@@ -175,15 +243,18 @@ export async function startOrderSession(input: StartOrderInput): Promise<Session
     });
     return { sessionId, agentViewUrl: null };
   }
+  // Navigateur vierge à chaque session : le profil H « par défaut » est commun à toute
+  // l'organisation, donc ses cookies (connexions, panier) passeraient d'un utilisateur à
+  // l'autre. L'agent se connecte au compte de l'utilisateur via SON vault.
   const overrides: Record<string, unknown> = {};
   if (input.compte?.vaultId) {
     overrides["agent.environments[kind=web].vault_id"] = input.compte.vaultId;
   }
   const session = await hai().startSession({
     agent: config.HAI_AGENT_ID,
-    messages: orderPrompt(input),
+    messages: cartPrompt(input),
     answerSchema: OrderAnswerSchema,
-    idleTimeoutS: 900, // la session attend 15 min la confirmation avant d'être libérée
+    idleTimeoutS: 60, // rien à attendre après l'ajout au panier : session libérée vite
     maxSteps: MAX_STEPS, // un agent bloqué ne tourne pas indéfiniment (coût)
     ...(Object.keys(overrides).length ? { overrides } : {}),
   });
@@ -254,8 +325,17 @@ export async function getSessionState(
     case "interrupted":
       return { statut: "echec", message: "Session interrompue (délai de confirmation dépassé ?)" };
     default: // failed, timed_out
-      return { statut: "echec", message: error ?? status };
+      return { statut: "echec", message: sessionError(status, session.status.errorCode, error) };
   }
+}
+
+/** Message lisible pour une session H échouée (l'erreur brute est en anglais et technique). */
+function sessionError(status: string, code?: string | null, raw?: string | null): string {
+  if (status === "timed_out")
+    return "L'agent a dépassé le temps imparti avant d'ajouter l'article au panier.";
+  if (code === "internal")
+    return "La plateforme H Company a rencontré une erreur interne pendant la session (pas un blocage du site). Réessaie : ça passe en général au 2e essai.";
+  return `La session de l'agent a échoué${raw ? ` : ${raw}` : "."}`;
 }
 
 function fromAnswer(
@@ -266,6 +346,12 @@ function fromAnswer(
   if (!parsed.success) return { statut: "echec", message: "Réponse de l'agent illisible." };
   const a = parsed.data;
   switch (a.etape) {
+    case "added_to_cart":
+      return {
+        statut: "au_panier",
+        message: a.resume,
+        ...(a.prixTotal ? { total: a.prixTotal } : {}),
+      };
     case "blocked":
       return {
         statut: "echec",
@@ -353,5 +439,9 @@ function mockState(sessionId: string): SessionState {
     };
   }
   if (elapsed < 8000) return { statut: "en_cours", message: "L'agent ajoute l'article au panier…" };
-  return { statut: "confirmation_requise", etape: "livraison", livraisons: MOCK_LIVRAISONS };
+  return {
+    statut: "au_panier",
+    message: `Article ajouté au panier, taille ${s.taille}`,
+    total: "39,95 €",
+  };
 }

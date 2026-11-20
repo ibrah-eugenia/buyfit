@@ -48,15 +48,29 @@ function versComptes(comptes: MerchantAccountView[]): CompteMarchandWeb[] {
 function dernierePhoto(photos: UserPhoto[], type: PhotoType): UserPhoto | undefined {
   return photos
     .filter((p) => p.type === type && p.url)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))[0];
 }
+
+const isMannequin = (p: UserPhoto) =>
+  p.type === "pied" && p.storagePath.split("/")[1] === "mannequin";
+/** Photos d'origine (visage, corps) qui servent à générer le mannequin : `<user>/sources/`. */
+const isSource = (p: UserPhoto) => p.storagePath.split("/")[1] === "sources";
 
 function versWebProfile(p: Profile, photos: UserPhoto[], comptes: MerchantAccountView[]) {
   const profil: WebProfile = {
     id: p.userId,
     genre: p.genre ?? undefined,
-    photoCorpsUrl: dernierePhoto(photos, "pied")?.url ?? undefined,
-    photoTeteUrl: dernierePhoto(photos, "face")?.url ?? undefined,
+    mannequinUrl: dernierePhoto(photos.filter(isMannequin), "pied")?.url ?? undefined,
+    photoCorpsUrl:
+      dernierePhoto(
+        photos.filter((photo) => !isMannequin(photo) && !isSource(photo)),
+        "pied",
+      )?.url ?? undefined,
+    photoTeteUrl:
+      dernierePhoto(
+        photos.filter((photo) => !isSource(photo)),
+        "face",
+      )?.url ?? undefined,
     taille: p.taille,
     mensurations: p.mensurations,
     poidsKg: p.poidsKg ?? undefined,
@@ -83,19 +97,55 @@ export async function getProfile(_userId: string): Promise<WebProfile> {
 }
 
 /** Data URL produite par PhotoDrop → fichier JPEG envoyé au bucket privé. */
-async function envoyerPhoto(dataUrl: string, type: PhotoType, anciennes: UserPhoto[]) {
+async function envoyerPhoto(
+  dataUrl: string,
+  type: PhotoType,
+  anciennes: UserPhoto[],
+  mannequin = false,
+) {
   const blob = await (await fetch(dataUrl)).blob();
   const fichier = new File([blob], `${type}.jpg`, { type: blob.type || "image/jpeg" });
-  donnees(await uploadUserPhoto(fichier, type));
+  donnees(await uploadUserPhoto(fichier, type, mannequin));
   // Une seule photo par type : on supprime les précédentes (minimisation des données).
-  await Promise.all(anciennes.filter((p) => p.type === type).map((p) => deleteUserPhoto(p.id)));
+  await Promise.all(
+    anciennes
+      .filter((p) => p.type === type && isMannequin(p) === mannequin && !isSource(p))
+      .map((p) => deleteUserPhoto(p.id)),
+  );
+}
+
+export type SourcePhoto = { id: string; type: PhotoType; url: string };
+
+/** Photos d'origine enregistrées (visage et corps), plus anciennes d'abord. */
+export async function listSourcePhotos(): Promise<SourcePhoto[]> {
+  return donnees(await listUserPhotos())
+    .filter((p) => isSource(p) && p.url)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    .map((p) => ({ id: p.id, type: p.type, url: p.url! }));
+}
+
+/** Enregistre une photo d'origine dans le bucket privé (dossier `sources/`). */
+export async function addSourcePhoto(file: File, type: PhotoType): Promise<SourcePhoto> {
+  const photo = donnees(await uploadUserPhoto(file, type, "sources"));
+  if (!photo.url) throw new Error("Photo enregistrée mais illisible.");
+  return { id: photo.id, type: photo.type, url: photo.url };
+}
+
+export async function removeSourcePhoto(id: string): Promise<void> {
+  donnees(await deleteUserPhoto(id));
 }
 
 const estNouvellePhoto = (v: string | undefined): v is string => !!v?.startsWith("data:");
 
 export async function saveProfile(userId: string, patch: Partial<WebProfile>): Promise<WebProfile> {
-  if (estNouvellePhoto(patch.photoCorpsUrl) || estNouvellePhoto(patch.photoTeteUrl)) {
+  if (
+    estNouvellePhoto(patch.mannequinUrl) ||
+    estNouvellePhoto(patch.photoCorpsUrl) ||
+    estNouvellePhoto(patch.photoTeteUrl)
+  ) {
     const anciennes = donnees(await listUserPhotos());
+    if (estNouvellePhoto(patch.mannequinUrl))
+      await envoyerPhoto(patch.mannequinUrl, "pied", anciennes, true);
     if (estNouvellePhoto(patch.photoCorpsUrl))
       await envoyerPhoto(patch.photoCorpsUrl, "pied", anciennes);
     if (estNouvellePhoto(patch.photoTeteUrl))

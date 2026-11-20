@@ -1,4 +1,5 @@
 import { Hono, type Context } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import type { z } from "zod";
@@ -17,6 +18,7 @@ import {
   TryOnApiRequestSchema,
   TryOnResultSchema,
   sizeEquivalents,
+  UserProfileSchema,
   type ApiError,
   type OrderStatus,
 } from "@buyfit/shared";
@@ -33,14 +35,24 @@ import {
 } from "./modules/hcompany.js";
 import {
   createOrder,
+  findMerchantAccount,
   getOrder,
   getProfile,
   updateOrder,
   type OrderRecord,
 } from "./modules/supabase.js";
+import {
+  accountTryOn,
+  checkPhoto,
+  fittingUser,
+  MAX_IMAGE,
+  modelImage,
+} from "./modules/account-fitting.js";
+import { db } from "./modules/supabase.js";
 import { tryOn } from "./modules/tryon.js";
 import { searchStores } from "./modules/search.js";
 import { identifyItem } from "./modules/vision.js";
+import { bodyOf } from "./modules/body.js";
 
 const allowedOrigins = config.CORS_ORIGINS?.split(",")
   .map((s) => s.trim())
@@ -71,6 +83,30 @@ async function requireProfile(userId: string) {
   const profile = await call("supabase", () => getProfile(userId));
   if (!profile) throw new HttpError(404, `Profil ${userId} introuvable`);
   return profile;
+}
+
+/**
+ * Corps d'une requête faite soit par l'extension (userId dans le corps), soit par le site via
+ * /api/fitting (jeton Supabase transmis) : l'utilisateur vient alors du jeton, pas du corps.
+ */
+async function accountBody<S extends z.ZodType<{ userId: string }>>(
+  c: Context,
+  schema: S,
+): Promise<z.infer<S>> {
+  const auth = c.req.header("Authorization");
+  if (!auth) {
+    const req = await body(c, schema);
+    await requireProfile(req.userId);
+    return req;
+  }
+  // Sans Supabase côté serveur (dev), le jeton ne peut pas être vérifié : profil de démo.
+  const userId = config.mocks.supabase ? "demo-user" : await fittingUser(auth);
+  const json: unknown = await c.req.json().catch(() => {
+    throw new HttpError(400, "Corps JSON invalide");
+  });
+  const parsed = schema.safeParse({ ...(json as object), userId });
+  if (!parsed.success) throw new HttpError(400, "Requête invalide", parsed.error.issues);
+  return parsed.data;
 }
 
 async function requireOrder(id: string) {
@@ -113,7 +149,7 @@ app.use(
           ? origin
           : null,
     allowMethods: ["GET", "POST", "OPTIONS"],
-    allowHeaders: ["Content-Type"],
+    allowHeaders: ["Content-Type", "Authorization"],
   }),
 );
 
@@ -132,7 +168,15 @@ app.get("/health", (c) => c.json({ ok: true, mocks: config.mocks }));
 // POST /capture → ProductMatch[]
 app.post("/capture", async (c) => {
   const req = await body(c, CaptureRequestSchema);
-  const profile = await requireProfile(req.userId);
+  let profile;
+  if (c.req.header("Authorization")) {
+    const userId = await fittingUser(c.req.header("Authorization"));
+    const { data, error } = await db().rpc("api_get_user_profile", { p_user_id: userId });
+    if (error || !data) throw new HttpError(404, "Profil BuyFit introuvable.");
+    profile = UserProfileSchema.parse({ ...data, photos: [] });
+  } else {
+    profile = await requireProfile(req.userId);
+  }
   const budgetMax = req.budgetMax ?? profile.budgetMax;
   const matches = await call("brightdata", () =>
     findMatches(req.capture, { ...profile, budgetMax }, req.requetesSecours),
@@ -142,8 +186,7 @@ app.post("/capture", async (c) => {
 
 // POST /identify → IdentifiedItem (zone sélectionnée → nom de l'article, modèle HF)
 app.post("/identify", async (c) => {
-  const req = await body(c, IdentifyRequestSchema);
-  await requireProfile(req.userId);
+  const req = await accountBody(c, IdentifyRequestSchema);
   const item = await call("vision", () => identifyItem(req.imageDataUrl));
   return c.json(IdentifiedItemSchema.parse(item));
 });
@@ -156,16 +199,64 @@ app.post("/serp", async (c) => {
   return c.json(SerpResponseSchema.parse(res));
 });
 
-// POST /search → { resultats, filtreIA } (Zara / Mango / Uniqlo + filtre IA de similarité)
+// POST /search → { resultats, filtreIA } (Zara / Uniqlo / Mango / Bershka + filtre IA de similarité)
 app.post("/search", async (c) => {
-  const req = await body(c, SearchRequestSchema);
-  await requireProfile(req.userId);
+  const req = await accountBody(c, SearchRequestSchema);
   const res = await call("search", () => searchStores(req));
   return c.json(SearchResponseSchema.parse(res));
 });
 
+const fittingLimit = bodyLimit({
+  maxSize: MAX_IMAGE + 65536,
+  onError: (c) => c.json({ error: "La photo dépasse 8 Mo." }, 413),
+});
+
+// Planche visage + planche corps : deux images, d'où une limite double.
+const avatarLimit = bodyLimit({
+  maxSize: 2 * MAX_IMAGE + 65536,
+  onError: (c) => c.json({ error: "Les photos dépassent 16 Mo au total." }, 413),
+});
+
+app.post("/avatar", avatarLimit, async (c) => {
+  const userId = await fittingUser(c.req.header("Authorization"));
+  // Corps décrit depuis le profil (taille, poids, morphologie) : rendu fidèle, pas flatteur.
+  const body = bodyOf(userId).catch(() => "");
+  const input = await c.req.formData().catch(() => {
+    throw new HttpError(400, "Photo manquante.");
+  });
+  const form = new FormData();
+  form.set("person", checkPhoto(input.get("person")), "person");
+  if (input.get("face")) form.set("face", checkPhoto(input.get("face")), "face");
+  const pose = Number(input.get("pose") ?? 0);
+  form.set("pose", String(Number.isInteger(pose) && pose >= 0 && pose <= 2 ? pose : 0));
+  const description = await body;
+  if (description) form.set("body", description.slice(0, 400));
+  const image = await modelImage("/avatar", form);
+  return new Response(image, {
+    headers: { "Content-Type": image.type, "Cache-Control": "private, no-store" },
+  });
+});
+
 // POST /tryon → TryOnResult (proxy vers services/tryon)
-app.post("/tryon", async (c) => {
+app.post("/tryon", fittingLimit, async (c) => {
+  const auth = c.req.header("Authorization");
+  if (auth || !config.mocks.supabase) {
+    const userId = await fittingUser(auth);
+    if (c.req.header("Content-Type")?.startsWith("multipart/form-data")) {
+      const form = await c.req.formData().catch(() => {
+        throw new HttpError(400, "Vêtement manquant.");
+      });
+      return c.json(await accountTryOn(userId, checkPhoto(form.get("garment"))));
+    }
+    const req = await body(c, TryOnApiRequestSchema.omit({ userId: true }));
+    if (!req.userPhotoUrl)
+      return c.json(
+        await accountTryOn(userId, req.garmentImageUrl, req.garmentName, req.productUrl),
+      );
+    return c.json(
+      await tryOn({ userPhotoUrl: req.userPhotoUrl, garmentImageUrl: req.garmentImageUrl }),
+    );
+  }
   const req = await body(c, TryOnApiRequestSchema);
   let userPhotoUrl = req.userPhotoUrl;
   if (!userPhotoUrl) {
@@ -182,9 +273,17 @@ app.post("/tryon", async (c) => {
 // POST /order → OrderStatus (lance l'agent H Company)
 app.post("/order", async (c) => {
   const req = await body(c, OrderRequestSchema);
-  const profile = await requireProfile(req.userId);
-  const host = new URL(req.productUrl).hostname;
-  const compte = profile.comptesMarchands.find((m) => host.endsWith(m.domaine));
+  await requireProfile(req.userId);
+  const host = new URL(req.productUrl).hostname.replace(/^www\./, "");
+  // Sans compte relié, l'agent remplirait un panier invité dans SON navigateur cloud : l'article
+  // n'apparaîtrait jamais dans le panier de l'utilisateur. On refuse donc avant de lancer l'agent.
+  const compte = await call("supabase", () => findMerchantAccount(req.userId, host));
+  if (!compte?.vaultId && !config.mocks.hcompany) {
+    throw new HttpError(
+      409,
+      `Relie ton compte ${host} dans les Réglages BuyFit : l'agent s'y connecte pour ajouter l'article à TON panier.`,
+    );
+  }
 
   const session = await call("hcompany", () =>
     startOrderSession({
@@ -194,6 +293,7 @@ app.post("/order", async (c) => {
         ...(req.genre ? { genre: req.genre } : {}),
         ...(req.categorie ? { categorie: req.categorie } : {}),
       }),
+      ...(req.couleur ? { couleur: req.couleur } : {}),
       ...(compte ? { compte } : {}),
     }),
   );
@@ -215,10 +315,12 @@ app.post("/order", async (c) => {
 // GET /order/:id → OrderStatus (suit la session H)
 app.get("/order/:id", async (c) => {
   let order = await requireOrder(c.req.param("id"));
-  if (!order.hSessionId || order.statut === "commandee" || order.statut === "echec") {
+  if (!order.hSessionId || order.statut === "commandee") {
     return c.json(toStatus(order));
   }
   const { hSessionId, confirmed } = order;
+  // Échec / panier déjà enregistrés : on relit quand même la session pour renvoyer le motif et
+  // le message (sinon l'extension n'affiche qu'un « n'a pas pu terminer » générique).
   const state = await call("hcompany", () => getSessionState(hSessionId, confirmed));
   if (state.statut !== order.statut) {
     order = await call("supabase", () => updateOrder(order.id, { statut: state.statut }));

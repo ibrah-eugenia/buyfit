@@ -120,6 +120,43 @@ class ServiceTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             model.generate_images.assert_called_once_with((image, "image/png"), (image, "image/png"))
 
+    def test_avatar_then_tryon_use_distinct_models(self):
+        from unittest.mock import Mock
+        headers = {"X-BuyFit-Request": "internal"}
+        raw = ("source.png", PNG, "image/png")
+        avatar = PNG + b"avatar-fixture"
+        flux, idm = Mock(), Mock()
+        flux.avatar.return_value = (avatar, "image/png")
+        idm.generate_images.return_value = RESULT
+        with patch.object(service, "MODE", "huggingface"):
+            service.app.state.avatar_model = flux
+            service.app.state.model = idm
+            response = self.client.post("/avatar", headers=headers, files={"person": raw})
+            self.assertEqual(response.content, avatar)
+            flux.avatar.assert_called_once_with((PNG, "image/png"))
+            for _ in range(2):
+                response = self.client.post("/tryon/account", headers=headers, files={
+                    "person": ("mannequin.png", avatar, "image/png"), "garment": raw,
+                })
+                self.assertEqual(response.content, PNG)
+                idm.generate_images.assert_called_with((avatar, "image/png"), (PNG, "image/png"))
+            self.assertEqual(flux.avatar.call_count, 1)
+
+    def test_avatar_fails_explicitly_and_can_retry(self):
+        from unittest.mock import Mock
+        files = {"person": ("source.png", PNG, "image/png")}
+        headers = {"X-BuyFit-Request": "internal"}
+        self.assertEqual(self.client.post("/avatar", files=files).status_code, 403)
+        self.assertEqual(self.client.post("/avatar", headers=headers, files=files).status_code, 503)
+        with patch.object(service, "MODE", "huggingface"):
+            flux = Mock()
+            service.app.state.avatar_model = flux
+            flux.avatar.side_effect = RuntimeError("ZeroGPU quota exceeded")
+            failed = self.client.post("/avatar", headers=headers, files=files)
+            self.assertEqual(failed.status_code, 502)
+            self.assertIn("quota", failed.json()["error"])
+            self.assertFalse(service.lock.locked())
+
     def test_remote_result_and_errors_release_lock(self):
         with patch.object(service, "MODE", "huggingface"):
             from unittest.mock import Mock
@@ -173,6 +210,21 @@ class ServiceTests(unittest.TestCase):
 
 
 class HuggingFaceClientTests(unittest.TestCase):
+    def test_kontext_contract_uses_official_space_and_its_image_result(self):
+        from model_client import KontextModel
+        with patch("gradio_client.Client") as client, patch("model_client.download_image") as download:
+            model = KontextModel("fixture-token")
+            client.return_value.submit.return_value.result.return_value = (
+                {"url": "https://black-forest-labs-flux-1-kontext-dev.hf.space/gradio_api/file=avatar.webp"}, 42, {}
+            )
+            download.return_value = (PNG, "image/png")
+            self.assertEqual(model.avatar((PNG, "image/png")), (PNG, "image/png"))
+            self.assertEqual(client.call_args.args[0], "black-forest-labs/FLUX.1-Kontext-Dev")
+            call = client.return_value.submit.call_args
+            self.assertEqual(call.kwargs["api_name"], "/infer")
+            self.assertEqual(call.args[1:], (model.PROMPT, 42, False, 2.5, 28))
+            self.assertEqual(download.call_args.args[1], {"black-forest-labs-flux-1-kontext-dev.hf.space"})
+
     def test_constructor_matches_installed_gradio_signature(self):
         # autospec checks the real installed signature without contacting Hugging Face.
         with patch("gradio_client.Client.__init__", autospec=True, return_value=None) as constructor:
@@ -254,7 +306,9 @@ class ResultStoreTests(unittest.TestCase):
                 store.save(RESULT)
             self.assertEqual(len(list(Path(directory).iterdir())), 20)
             self.assertIsNone(store.find("../../app.py"))
-            self.assertTrue(all((path.stat().st_mode & 0o777) == 0o600 for path in Path(directory).iterdir()))
+            # Windows ignore les droits Unix : la vérification n'a de sens que sous POSIX (Docker/Linux).
+            if os.name == "posix":
+                self.assertTrue(all((path.stat().st_mode & 0o777) == 0o600 for path in Path(directory).iterdir()))
 
     def test_rejects_non_images(self):
         with TemporaryDirectory() as directory:

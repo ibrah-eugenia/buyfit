@@ -27,9 +27,15 @@ const EXTENSIONS: Record<(typeof PHOTO_MIME_TYPES)[number], string> = {
 const isAllowedMime = (t: string): t is (typeof PHOTO_MIME_TYPES)[number] =>
   (PHOTO_MIME_TYPES as readonly string[]).includes(t);
 
+/**
+ * `dossier` : true → `<user>/mannequin/` (mannequin validé), "sources" → `<user>/sources/`
+ * (photos d'origine du visage et du corps, gardées pour régénérer le mannequin quand le moteur
+ * change), false → `<user>/`.
+ */
 export async function uploadUserPhoto(
   file: File,
   type: PhotoType = "pied",
+  dossier: boolean | "sources" = false,
 ): Promise<ActionResult<UserPhoto>> {
   if (!PhotoTypeSchema.safeParse(type).success)
     return { ok: false, error: "Type de photo invalide." };
@@ -45,7 +51,8 @@ export async function uploadUserPhoto(
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Connecte-toi d'abord." };
 
-  const path = `${user.id}/${crypto.randomUUID()}.${EXTENSIONS[file.type]}`;
+  const sub = dossier === "sources" ? "sources/" : dossier ? "mannequin/" : "";
+  const path = `${user.id}/${sub}${crypto.randomUUID()}.${EXTENSIONS[file.type]}`;
   const { error: uploadError } = await supabase.storage
     .from(BUCKETS.userPhotos)
     .upload(path, file, { contentType: file.type, upsert: false });

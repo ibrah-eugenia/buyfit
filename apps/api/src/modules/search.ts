@@ -1,25 +1,35 @@
 /**
  * Recherche par magasin test : la requête de la pièce identifiée (+ genre) est lancée en
- * parallèle sur Google Images, restreinte au site de chaque magasin (Zara, Mango, Uniqlo),
+ * parallèle sur Google Images, restreinte au site de chaque magasin (Zara, Uniqlo, Mango,
+ * Bershka),
  * via Bright Data. On ne garde que les fiches produit (une par article, version FR, bon genre),
  * puis le filtre IA de similarité écarte celles dont la couleur ou la coupe ne correspond pas.
  *
  * Pourquoi Google Images plutôt que Shopping : liens directs vers la fiche du magasin, photo
  * officielle HD, titres avec la couleur, et `site:` évite les revendeurs et le rayon femme.
- * Limite : pas de prix dans Google Images (prix = 0 → l'extension affiche « Voir le prix »).
+ * Prix : Google Images ne le donne pas ; on le lit directement sur la fiche produit
+ * (Zara : JSON `?ajax=true`, Uniqlo : données de la page, Mango : microdonnées `itemprop`) ;
+ * Bershka (page vide côté serveur) ou introuvable à temps → prix = 0, « Voir le prix ».
+ * Mango (retiré le 19/11/2026, son site bloque le paiement par agent) revient le 20/11/2026 :
+ * l'agent ne fait qu'ajouter au panier, le paiement reste à l'utilisateur.
+ *
+ * Budget total : SEARCH_BUDGET_MS (20 s). Magasins coupés à STORE_DEADLINE_MS, puis filtre IA
+ * et prix en parallèle dans le temps restant ; filtre trop lent → résultats non filtrés.
  */
 import { createHash } from "node:crypto";
 import type { ProductMatch, SearchRequest, SearchResponse } from "@buyfit/shared";
 import { config } from "../config.js";
-import {
-  brandKey,
-  cleanQuery,
-  searchImages,
-  searchShopping,
-  titleOverlap,
-  type ImageHit,
-} from "./brightdata.js";
+import { cleanQuery, searchImages, type ImageHit } from "./brightdata.js";
 import { filterBySimilarity } from "./similarity.js";
+import { TtlCache } from "./cache.js";
+
+/**
+ * Résultats Google Images par magasin et requête, gardés 30 min : Bright Data renvoie des listes
+ * différentes d'un appel à l'autre (et dépasse parfois le délai). Même requête → même résultat.
+ */
+const storeHits = new TtlCache<Hit[]>(30 * 60_000);
+/** Recherche complète (requête + pièce) : même sélection → mêmes articles, instantanément. */
+const searches = new TtlCache<SearchResponse>(30 * 60_000);
 
 type Store = {
   name: string;
@@ -28,91 +38,242 @@ type Store = {
   product: RegExp;
   /** Identifiant de l'article dans l'URL : sert à supprimer les doublons (pays, couleurs). */
   id: RegExp;
+  /** Ramène le lien vers la boutique française (par défaut : /xx/fr/ → /fr/fr/). */
+  french?: (url: string) => string;
 };
 
 export const STORES: Store[] = [
   { name: "Zara", site: "zara.com", product: /-p\d{6,}\.html/, id: /-p(\d{6,})\.html/ },
-  { name: "Mango", site: "shop.mango.com", product: /\/p\/.+\/\d{8}/, id: /\/(\d{8})(?:[/?]|$)/ },
   {
     name: "Uniqlo",
     site: "uniqlo.com",
     product: /\/products\/E?\d{6}/,
     id: /\/products\/(E?\d{6})/,
   },
+  {
+    // https://shop.mango.com/fr/fr/p/femme/blazer/ajustees/blazer-…/37065841/99/00
+    name: "Mango",
+    site: "shop.mango.com",
+    product: /\/p\/.+\/\d{8}(?:[/?]|$)/,
+    id: /\/(\d{8})(?:[/?]|$)/,
+  },
+  {
+    // https://www.bershka.com/fr/blazer-croisé-à-boutons-c0p247647657.html?colorId=800
+    name: "Bershka",
+    site: "bershka.com",
+    product: /-c0p\d{6,}\.html/,
+    id: /-c0p(\d{6,})\.html/,
+    // Pays avec ou sans langue (/ca/fr/, /dz/, /fr/) → boutique France (/fr/).
+    french: (url) => url.replace(/^(https:\/\/[^/]+)\/(?:[a-z]{2}\/){1,2}/, "$1/fr/"),
+  },
 ];
-/** Candidats par magasin envoyés au filtre IA : plus = meilleur rappel, mais plus lent. */
+/**
+ * Candidats par magasin envoyés au filtre IA : plus = meilleur rappel, mais plus lent.
+ * 4 magasins × 4 = 16 images, proche des 12 (2 × 6) d'avant pour la latence du filtre.
+ */
 const PER_STORE = 4;
-/** Au-delà, un magasin trop lent est ignoré : on affiche les autres plutôt que d'attendre. */
-const STORE_DEADLINE_MS = 14_000;
-/** Recherche de prix par produit : au-delà, le produit reste sans prix (« Voir le prix »). */
-const PRICE_DEADLINE_MS = 6_000;
-/** Recouvrement minimal entre le nom du produit et le titre Google Shopping. */
-const PRICE_MIN_OVERLAP = 0.5;
+/** Temps maximum d'une recherche, de la requête à la réponse. */
+const SEARCH_BUDGET_MS = 19_500;
+/**
+ * Au-delà, un magasin trop lent est ignoré : on affiche les autres plutôt que d'attendre.
+ * Bright Data répond en 8 à 15 s pour une recherche Google Images (mesuré le 19/11/2026) ;
+ * il reste ensuite ~7 s pour le filtre IA (~6 s) et les prix (en parallèle).
+ */
+const STORE_DEADLINE_MS = 12_500;
+const UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36";
 
 export async function searchStores(req: SearchRequest): Promise<SearchResponse> {
+  const key = createHash("sha1")
+    .update(`${req.requete}|${req.genre ?? ""}|${req.imageDataUrl ?? ""}`)
+    .digest("hex");
+  const cached = searches.get(key);
+  if (cached) {
+    console.info(`[search] ${cached.resultats.length} résultats (cache)`);
+    return cached;
+  }
+  const res = await searchOnce(req);
+  // On ne garde que les recherches complètes (les 2 magasins ont répondu et il y a des articles).
+  if (res.resultats.length) searches.set(key, res);
+  return res;
+}
+
+async function searchOnce(req: SearchRequest): Promise<SearchResponse> {
+  const started = Date.now();
   const base = withGender(cleanQuery(req.requete), req.genre);
   const perStore = await Promise.all(
     STORES.map((s) => withDeadline(searchStore(s, base, req.genre), STORE_DEADLINE_MS, s.name)),
   );
-  const hits = perStore.flatMap((items) => items.slice(0, PER_STORE));
+  // Magasins en alternance (Zara 1, Uniqlo 1, Mango 1, Bershka 1, Zara 2…) : le modèle note
+  // moins bien les dernières images d'une longue liste, aucun magasin ne doit être toujours en fin.
+  const hits = interleave(perStore.map((items) => items.slice(0, PER_STORE)));
   const products = hits.map((h) => h.product);
   if (!products.length) return { resultats: [], filtreIA: false };
-  // Prix (Google Shopping) et filtre IA en parallèle : la latence reste celle du plus lent.
+
+  // Filtre IA et prix en parallèle, dans le temps restant du budget.
   // Le filtre IA compare les miniatures Google (légères) ; l'extension affiche la photo HD.
+  const remaining = Math.max(2_000, SEARCH_BUDGET_MS - (Date.now() - started));
   const thumbs = new Map(hits.map((h) => [h.product.id, h.thumb]));
+  const unfiltered: SearchResponse = { resultats: products, filtreIA: false };
   const [filtered, prices] = await Promise.all([
     req.imageDataUrl
-      ? filterBySimilarity(req.imageDataUrl, products, (p) => thumbs.get(p.id) ?? p.imageUrl)
-      : Promise.resolve({ resultats: products, filtreIA: false }),
-    findPrices(products),
+      ? within(
+          filterBySimilarity(req.imageDataUrl, products, (p) => thumbs.get(p.id) ?? p.imageUrl),
+          remaining,
+          unfiltered,
+          "filtre IA",
+        )
+      : Promise.resolve(unfiltered),
+    findDetails(products, remaining),
   ]);
+  // Rayon lu sur la fiche (Zara « WOMAN », Uniqlo « WOMEN »…) : Google renvoie des articles de
+  // l'autre rayon même avec « homme » dans la requête. Rayon inconnu → on garde l'article.
+  const wrongRayon = (id: string) => {
+    const r = prices.get(id)?.rayon;
+    return (
+      !!r && (req.genre === "homme" || req.genre === "femme") && r !== req.genre && r !== "mixte"
+    );
+  };
+  const resultats = filtered.resultats.filter((p) => !wrongRayon(p.id));
+  console.info(
+    `[search] ${resultats.length} résultats en ${Date.now() - started} ms` +
+      (resultats.length < filtered.resultats.length
+        ? ` (${filtered.resultats.length - resultats.length} de l'autre rayon écartés)`
+        : ""),
+  );
   return {
     ...filtered,
-    resultats: filtered.resultats.map((p) => {
-      const price = prices.get(p.id);
-      return price ? { ...p, prix: price.prix, devise: price.devise } : p;
+    resultats: resultats.map((p) => {
+      const prix = prices.get(p.id)?.prix;
+      return prix ? { ...p, prix, devise: "EUR" as const } : p;
     }),
   };
 }
 
-/**
- * Google Images ne donne pas le prix : on cherche chaque produit sur Google Shopping
- * (nom + magasin) et on garde le prix d'une offre du même magasin au titre proche.
- */
-async function findPrices(
-  products: ProductMatch[],
-): Promise<Map<string, Pick<ProductMatch, "prix" | "devise">>> {
+/** [[a1, a2], [b1], [c1, c2]] → [a1, b1, c1, a2, c2]. */
+export function interleave<T>(lists: T[][]): T[] {
+  const out: T[] = [];
+  for (let i = 0; i < Math.max(0, ...lists.map((l) => l.length)); i++)
+    for (const l of lists) if (i < l.length) out.push(l[i]!);
+  return out;
+}
+
+/** Résout `p`, ou `fallback` si `p` dépasse `ms`. */
+function within<T>(p: Promise<T>, ms: number, fallback: T, label: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const late = new Promise<T>((resolve) => {
+    timer = setTimeout(() => {
+      console.warn(`[search] ${label} : pas de réponse en ${ms} ms`);
+      resolve(fallback);
+    }, ms);
+  });
+  return Promise.race([p, late]).finally(() => clearTimeout(timer));
+}
+
+type Rayon = "homme" | "femme" | "mixte" | "enfant";
+type Details = { prix: number | null; rayon: Rayon | null };
+
+/** Prix (en euros) et rayon de chaque produit, lus sur sa fiche ; absents si introuvables à temps. */
+async function findDetails(products: ProductMatch[], ms: number): Promise<Map<string, Details>> {
   if (config.mocks.brightdata) return new Map();
   const found = await Promise.all(
-    products.map(async (p) => {
-      const key = brandKey(p.marque);
-      const name = p.nom.split(" - ")[0]!;
-      const pick = (offers: ProductMatch[]) =>
-        offers
-          .filter(
-            (o) =>
-              o.prix > 0 && (brandKey(o.marque) === key || o.marque.toLowerCase().includes(key)),
-          )
-          .map((o) => ({ o, overlap: titleOverlap(name, o.nom) }))
-          .filter((x) => x.overlap >= PRICE_MIN_OVERLAP)
-          .sort((a, b) => b.overlap - a.overlap)[0]?.o;
-      // Nom complet, puis 5 premiers mots : Bright Data rejette parfois une formulation
-      // (et bloque alors cette URL exacte 60 s), une autre passe souvent.
-      const queries = [...new Set([name, name.split(" ").slice(0, 5).join(" ")])].map(
-        (n) => `${n} ${p.marque}`,
-      );
-      const lookup = (async () => {
-        for (const q of queries) {
-          const best = pick(await searchShopping(q).catch(() => []));
-          if (best) return [p.id, { prix: best.prix, devise: best.devise }] as const;
-        }
-        return null;
-      })();
-      const late = new Promise<null>((r) => setTimeout(() => r(null), PRICE_DEADLINE_MS));
-      return Promise.race([lookup.catch(() => null), late]);
-    }),
+    products.map((p) =>
+      within(
+        detailsOf(p).catch(() => null),
+        ms,
+        null,
+        `fiche ${p.marque}`,
+      ).then((d) => (d ? ([p.id, d] as const) : null)),
+    ),
   );
   return new Map(found.filter((x) => x !== null));
+}
+
+async function fetchText(url: string): Promise<string> {
+  const res = await fetch(url, {
+    headers: { "User-Agent": UA, "Accept-Language": "fr-FR" },
+    signal: AbortSignal.timeout(8_000),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.text();
+}
+
+async function detailsOf(p: ProductMatch): Promise<Details | null> {
+  if (p.marque === "Zara") {
+    const json = await fetchText(zaraJsonUrl(p.url));
+    return { prix: zaraPrice(json), rayon: zaraRayon(json) };
+  }
+  if (p.marque === "Uniqlo") {
+    const html = await fetchText(p.url);
+    return { prix: uniqloPrice(html), rayon: uniqloRayon(html) };
+  }
+  if (p.marque === "Mango") {
+    // Mango répond souvent 429 aux requêtes serveur : le rayon (dans l'URL) reste connu.
+    const html = await fetchText(p.url).catch(() => null);
+    return { prix: html ? mangoPrice(html) : null, rayon: mangoRayon(p.url) };
+  }
+  return null;
+}
+
+/** Rayon Zara : « "sectionName":"MAN" » / « WOMAN » / « KID ». */
+export function zaraRayon(json: string): Rayon | null {
+  const s = json.match(/"sectionName"\s*:\s*"([A-Z]+)"/)?.[1];
+  return s === "MAN" ? "homme" : s === "WOMAN" ? "femme" : s === "KID" ? "enfant" : null;
+}
+
+/**
+ * Rayon Uniqlo : catégorie du produit dans les données de la page,
+ * « "gender":{"id":"37609","level":1,"name":"men",… » (les « "gender":["Women"] » des
+ * recommandations ne comptent pas).
+ */
+export function uniqloRayon(html: string): Rayon | null {
+  const g = html
+    .match(
+      /"gender"\s*:\s*\{\s*"id"\s*:\s*"\d+"\s*,\s*"level"\s*:\s*1\s*,\s*"name"\s*:\s*"([a-z]+)"/i,
+    )?.[1]
+    ?.toUpperCase();
+  if (!g) return null;
+  if (g === "MEN" || g === "MAN" || g === "HOMME") return "homme";
+  if (g === "WOMEN" || g === "WOMAN" || g === "FEMME") return "femme";
+  if (g === "UNISEX") return "mixte";
+  if (g === "KIDS" || g === "BABY" || g === "ENFANT") return "enfant";
+  return null;
+}
+
+/** Prix Mango dans les microdonnées : « itemprop="price" content="69.99" ». */
+export function mangoPrice(html: string): number | null {
+  const v = html.match(/itemprop="price"\s+content="([\d.]+)"/)?.[1];
+  return v ? Number(v) : null;
+}
+
+/** Rayon Mango lu dans l'URL : /p/femme/…, /p/homme/…, /p/enfants/… */
+export function mangoRayon(url: string): Rayon | null {
+  const s = url.match(/\/p\/([a-z]+)\//)?.[1];
+  return s === "homme"
+    ? "homme"
+    : s === "femme"
+      ? "femme"
+      : s?.startsWith("enfant")
+        ? "enfant"
+        : null;
+}
+
+/** Fiche Zara en JSON : même URL avec `?ajax=true` (paramètres de coloris conservés). */
+export const zaraJsonUrl = (url: string) => `${url}${url.includes("?") ? "&" : "?"}ajax=true`;
+
+/** Prix Zara en centimes (« "price":4595 ») → euros. */
+export function zaraPrice(json: string): number | null {
+  const cents = json.match(/"price"\s*:\s*(\d+)/)?.[1];
+  return cents ? Number(cents) / 100 : null;
+}
+
+/** Prix Uniqlo dans les données de la page : prix promo s'il existe, sinon prix de base. */
+export function uniqloPrice(html: string): number | null {
+  const m = html.match(
+    /"prices":\{"base":\{"currency":\{[^}]*\},"value":([\d.]+)\},"promo":(?:\{"currency":\{[^}]*\},"value":([\d.]+)\}|null)/,
+  );
+  if (!m) return null;
+  return Number(m[2] ?? m[1]);
 }
 
 /** Ajoute « homme » / « femme » à la requête s'il n'y figure pas déjà. */
@@ -140,19 +301,23 @@ async function searchStore(
   genre?: SearchRequest["genre"],
 ): Promise<Hit[]> {
   if (config.mocks.brightdata) return mockStore(store.name);
-  // Version française du site d'abord ; sinon le site entier (les liens sont ramenés en FR).
-  for (const site of [`${store.site}/fr`, store.site]) {
-    try {
-      const hits = pickProducts(await searchImages(`${base} site:${site}`), store, genre);
-      if (hits.length) return hits;
-    } catch (err) {
-      console.warn(
-        `[search] ${store.name} :`,
-        err instanceof Error ? err.message.slice(0, 120) : err,
-      );
-    }
+  // Une seule requête sur le site entier : les liens sont ramenés en version FR (toFrench).
+  // (L'ancienne 1re tentative « site:<magasin>/fr » expirait souvent, ex. Mango n'a pas de
+  // chemin /fr, et consommait tout le délai du magasin.)
+  const cacheKey = `${store.name}|${base}|${genre ?? ""}`;
+  const cached = storeHits.get(cacheKey);
+  if (cached) return cached;
+  try {
+    const hits = pickProducts(await searchImages(`${base} site:${store.site}`), store, genre);
+    if (hits.length) storeHits.set(cacheKey, hits);
+    return hits;
+  } catch (err) {
+    console.warn(
+      `[search] ${store.name} :`,
+      err instanceof Error ? err.message.slice(0, 120) : err,
+    );
+    return [];
   }
-  return [];
 }
 
 const OTHER_GENDER = {
@@ -180,10 +345,10 @@ export function pickProducts(
       product: {
         id: `img-${createHash("sha1").update(`${store.name}|${key}`).digest("hex").slice(0, 12)}`,
         marque: store.name,
-        nom: cleanTitle(h.title),
+        nom: /^[\w.-]+\.(?:net|com)\//.test(h.title) ? titleFromUrl(h.link) : cleanTitle(h.title),
         prix: 0, // inconnu : Google Images ne donne pas le prix
         devise: "EUR",
-        url: toFrench(h.link),
+        url: (store.french ?? toFrench)(h.link),
         imageUrl: h.image,
         tailleDisponibles: [],
         score: Math.max(0.3, 0.8 - rank * 0.01),
@@ -195,6 +360,18 @@ export function pickProducts(
 
 /** /be/fr/, /ne/fr/… → /fr/fr/ : boutique française (prix et livraison en France). */
 const toFrench = (url: string) => url.replace(/^(https:\/\/[^/]+)\/[a-z]{2}\/fr\//, "$1/fr/fr/");
+
+/**
+ * Nom tiré de l'URL quand Google donne un chemin d'image au lieu d'un titre (Bershka) :
+ * « …/blazer-crois%C3%A9-%C3%A0-boutons-c0p243093353.html » → « Blazer croisé à boutons ».
+ */
+export function titleFromUrl(url: string): string {
+  const slug = decodeURIComponent(new URL(url).pathname.split("/").pop() ?? "")
+    .replace(/-c0p\d+\.html$|\.html$/, "")
+    .replace(/-/g, " ")
+    .trim();
+  return slug ? slug.charAt(0).toUpperCase() + slug.slice(1) : "Article";
+}
 
 /** « VESTE À REVERS CROISÉS - Beige clair - 46 | ZARA France » → « Veste à revers croisés - Beige clair ». */
 export function cleanTitle(title: string): string {
@@ -219,12 +396,6 @@ const MOCK: Record<string, [string, string][]> = {
     [
       "Blazer oversize laine mélangée",
       "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=600",
-    ],
-  ],
-  Mango: [
-    [
-      "Veste de costume structurée",
-      "https://images.unsplash.com/photo-1551028719-00167b16eac5?w=600",
     ],
   ],
   Uniqlo: [

@@ -7,12 +7,14 @@ import {
 } from "@buyfit/shared";
 import { useCallback, useEffect, useState } from "react";
 import { browser } from "wxt/browser";
+import { openWeb, useAccount } from "@/lib/account";
 import { api, USE_MOCK } from "@/lib/api";
 import { CAPTURE_STORAGE_KEY } from "@/lib/messages";
 import { Home } from "./Home";
 import { Wordmark } from "./Logo";
+import { LoadingDots } from "./Spinner";
 
-// TODO(ibrahim) : remplacer par l'utilisateur connecté (auth Supabase via apps/web).
+/** Sans compte connecté : l'API prend le profil de démo. */
 const USER_ID = "demo-user";
 const POLL_MS = 3000;
 /** Ouvert dans le panneau du logo flottant (iframe sur Pinterest). */
@@ -31,6 +33,8 @@ const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 export function App() {
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
+  const account = useAccount();
+  const signedIn = account.kind === "signed-in" ? account.account : undefined;
 
   // budgetMax absent (clic droit) → l'API prend le budget du profil.
   const search = useCallback(
@@ -78,6 +82,28 @@ export function App() {
         </h1>
         {USE_MOCK && <span className="badge">mock</span>}
         <div className="topbar-actions">
+          {signedIn && (
+            <button
+              type="button"
+              className="account-chip"
+              title={`Connecté : ${signedIn.email ?? ""}. Ouvrir mon compte`}
+              onClick={() => openWeb(signedIn.onboardingTermine ? "/settings" : "/onboarding")}
+            >
+              {signedIn.avatarUrl ? (
+                <img className="account-dot" src={signedIn.avatarUrl} alt="" />
+              ) : (
+                <span className="account-dot" aria-hidden="true">
+                  {(signedIn.prenom ?? signedIn.email ?? "?").charAt(0).toUpperCase()}
+                </span>
+              )}
+              {signedIn.prenom ?? signedIn.email?.split("@")[0] ?? "Mon compte"}
+            </button>
+          )}
+          {account.kind === "signed-out" && (
+            <button type="button" className="btn ghost small" onClick={() => openWeb("/login")}>
+              Se connecter
+            </button>
+          )}
           {phase.kind !== "idle" && (
             <button type="button" className="btn ghost small" onClick={reset}>
               Nouvelle recherche
@@ -107,14 +133,14 @@ export function App() {
         </div>
       </header>
 
-      {phase.kind === "idle" && <Home userId={USER_ID} />}
+      {phase.kind === "idle" && <Home userId={signedIn?.userId ?? USER_ID} account={signedIn} />}
 
       {phase.kind !== "idle" && (
         <main className="content">
           {phase.kind === "searching" && (
             <>
               <img className="inspiration" src={phase.capture.imageUrl} alt="Inspiration" />
-              <p className="loading">Recherche d'équivalents dans ton budget…</p>
+              <LoadingDots />
             </>
           )}
 

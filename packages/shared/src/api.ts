@@ -36,7 +36,7 @@ export const SerpResponseSchema = z.object({
 export type SerpResponse = z.infer<typeof SerpResponseSchema>;
 
 // POST /search : pièce identifiée → une recherche Google Shopping par magasin test
-// (Zara, Mango, Uniqlo), puis filtre IA de similarité visuelle avec la pièce sélectionnée.
+// (Zara, Uniqlo, Mango, Bershka), puis filtre IA de similarité visuelle avec la pièce sélectionnée.
 export const SearchRequestSchema = z.object({
   userId: z.string().min(1),
   requete: z.string().min(1).max(160),
@@ -57,6 +57,10 @@ export type SearchResponse = z.infer<typeof SearchResponseSchema>;
 // POST /tryon — userPhotoUrl optionnel : sinon 1re photo du profil.
 export const TryOnApiRequestSchema = TryOnRequestSchema.partial({ userPhotoUrl: true }).extend({
   userId: z.string().min(1),
+  /** « Marque - nom du produit » : aide le modèle à reproduire couleur et coupe. */
+  garmentName: z.string().max(300).optional(),
+  /** Fiche produit : on y récupère packshot et photo portée pour un essayage plus fidèle. */
+  productUrl: z.url().max(2048).optional(),
 });
 export type TryOnApiRequest = z.infer<typeof TryOnApiRequestSchema>;
 

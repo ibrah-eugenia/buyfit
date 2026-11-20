@@ -1,12 +1,14 @@
 "use client";
 
 import { Info, ShoppingBag, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { useCart } from "@/components/app-providers";
 import { SizeSelect } from "@/components/cart/size-select";
+import { ImageLightbox } from "@/components/image-lightbox";
 import { ProductImage } from "@/components/product-image";
 import { Button } from "@/components/ui/button";
+import { tryOnGarment } from "@/lib/data/fitting";
 import type { SearchResult } from "@/lib/types";
 import { cn, formatPrix } from "@/lib/utils";
 
@@ -21,43 +23,96 @@ export function ResultCard({
 }) {
   const { add } = useCart();
   const [taille, setTaille] = useState(result.tailleConseillee);
-  const [vue, setVue] = useState<"produit" | "essayage">(
-    result.essayage && avatarUrl ? "essayage" : "produit",
-  );
+  const [vue, setVue] = useState<"produit" | "essayage">("produit");
+  const [image, setImage] = useState<string>();
+  const [pending, setPending] = useState(false);
+  const [pleinEcran, setPleinEcran] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const pourcentage = Math.round(result.score * 100);
-  const peutEssayer = !!result.essayage && !!avatarUrl;
+  // The web demo catalogue has placeholder URLs; let users supply the real garment.
+  const needsFile = new URL(result.imageUrl).hostname === "example.com";
+
+  async function showFitting(file?: File) {
+    if (pending) return;
+    if (!avatarUrl) return toast.error("Crée ton mannequin dans Réglages → Photos.");
+    if (image) {
+      setVue("essayage");
+      return;
+    }
+    if (!file && needsFile) {
+      fileInput.current?.click();
+      return;
+    }
+    if (file && file.size > 8 * 1024 * 1024) return toast.error("La photo dépasse 8 Mo.");
+    setPending(true);
+    try {
+      setImage(await tryOnGarment(file ?? result.imageUrl));
+      setVue("essayage");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Essayage impossible.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  // Image visible dans la carte (essayage ou produit), sauf visuel de remplacement.
+  const imageAffichee =
+    vue === "essayage" && image ? image : needsFile ? undefined : result.imageUrl;
 
   return (
-    <article
-      className="flex flex-col overflow-hidden rounded-2xl border border-line-soft bg-white"
-      aria-labelledby={`titre-${result.id}`}
-    >
-      <div className="relative aspect-[4/5] bg-linen">
-        {vue === "essayage" && avatarUrl ? (
-          <>
-            {/* Essayage simulé : la photo de l'avatar. Le vrai rendu viendra du service try-on de Félix. */}
-            <img
-              src={avatarUrl}
-              alt={`Essayage de ${result.nom} sur ton avatar`}
-              className="size-full object-cover"
+    <article className="group/carte flex flex-col" aria-labelledby={`titre-${result.id}`}>
+      <div className="relative aspect-[4/5] overflow-hidden rounded-[24px] bg-linen">
+        <button
+          type="button"
+          onClick={() => setPleinEcran(true)}
+          disabled={!imageAffichee}
+          aria-label="Voir l'image en plein écran"
+          className="block size-full cursor-zoom-in focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset disabled:cursor-default"
+        >
+          {vue === "essayage" && image ? (
+            <>
+              <img
+                src={image}
+                alt={`Essayage de ${result.nom} sur ton avatar`}
+                className="size-full object-cover"
+              />
+              <span className="absolute bottom-3 left-3 inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-caption font-semibold text-ink">
+                <Sparkles className="size-3.5 text-brand" aria-hidden="true" />
+                Sur toi
+              </span>
+            </>
+          ) : (
+            <ProductImage
+              src={result.imageUrl}
+              alt={result.nom}
+              categorie={result.categorie}
+              className="size-full"
             />
-            <span className="absolute bottom-3 left-3 inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-caption font-semibold text-ink">
-              <Sparkles className="size-3.5 text-brand" aria-hidden="true" />
-              Sur toi
-            </span>
-          </>
-        ) : (
-          <ProductImage
-            src={result.imageUrl}
-            alt={result.nom}
-            categorie={result.categorie}
-            className="size-full"
-          />
-        )}
-        <span className="absolute top-3 left-3 rounded-full bg-ink px-2.5 py-1 text-caption font-bold text-white">
+          )}
+        </button>
+        <ImageLightbox
+          src={imageAffichee}
+          alt={vue === "essayage" ? `Essayage de ${result.nom}` : result.nom}
+          open={pleinEcran}
+          onOpenChange={setPleinEcran}
+        />
+        <input
+          ref={fileInput}
+          type="file"
+          className="sr-only"
+          tabIndex={-1}
+          aria-label="Photo du vêtement à essayer"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) void showFitting(file);
+          }}
+        />
+        <span className="absolute top-3 left-3 rounded-full border border-white/50 bg-white/40 px-3 py-1.5 text-caption font-semibold text-ink backdrop-blur-xl">
           {pourcentage} % ressemblant
         </span>
-        {peutEssayer && (
+        {
           <div
             className="absolute top-3 right-3 flex rounded-full bg-white/95 p-0.5 text-caption font-semibold"
             role="group"
@@ -67,28 +122,29 @@ export function ResultCard({
               <button
                 key={v}
                 type="button"
-                onClick={() => setVue(v)}
+                disabled={pending}
+                onClick={() => (v === "produit" ? setVue(v) : void showFitting())}
                 aria-pressed={vue === v}
                 className={cn(
                   "rounded-full px-2.5 py-1 transition-colors",
                   vue === v ? "bg-brand text-white" : "text-grey hover:text-ink",
                 )}
               >
-                {v === "essayage" ? "Sur moi" : "Produit"}
+                {v === "essayage" ? (pending ? "Essayage…" : "Sur moi") : "Produit"}
               </button>
             ))}
           </div>
-        )}
+        }
       </div>
-      <div className="flex flex-1 flex-col gap-3 p-4">
+      <div className="flex flex-1 flex-col gap-3 px-1 pt-4">
         <div className="flex flex-col gap-1">
           <p className="text-[11px] font-semibold tracking-[0.04em] text-grey uppercase">
             {result.categorie} · {result.marque}
           </p>
-          <h3 id={`titre-${result.id}`} className="text-[15px] font-semibold">
+          <h3 id={`titre-${result.id}`} className="text-[17px] leading-snug text-ink">
             {result.nom}
           </h3>
-          <p className="text-[15px] font-bold text-brand">
+          <p className="text-[22px] font-bold tracking-[-0.03em] text-ink">
             {formatPrix(result.prix, result.devise)}
           </p>
           {budgetMax !== undefined && result.prix > budgetMax && (
@@ -97,14 +153,14 @@ export function ResultCard({
             </p>
           )}
         </div>
-        <p className="flex items-start gap-2 rounded-[10px] bg-linen p-2.5 text-caption text-copy">
+        <p className="flex items-start gap-2 border-t border-ink/15 pt-3 text-caption text-copy">
           <Info className="mt-px size-3.5 shrink-0 text-brand" aria-hidden="true" />
           <span>
             D&apos;après le guide des tailles {result.marque} : taille conseillée{" "}
             <strong className="font-bold text-ink">{result.tailleConseillee}</strong>
           </span>
         </p>
-        <div className="mt-auto flex items-center justify-between gap-2">
+        <div className="mt-auto flex items-center justify-between gap-2 border-t border-ink/15 pt-3">
           <SizeSelect
             id={`taille-${result.id}`}
             value={taille}

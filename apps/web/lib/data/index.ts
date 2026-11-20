@@ -6,7 +6,16 @@
  * livraison, points relais et lancement des commandes.
  */
 export { getSession, signIn, signOut, signUp } from "./auth";
-export { connectMerchant, disconnectMerchant, getProfile, saveProfile } from "./profile";
+export {
+  addSourcePhoto,
+  connectMerchant,
+  disconnectMerchant,
+  getProfile,
+  listSourcePhotos,
+  removeSourcePhoto,
+  saveProfile,
+  type SourcePhoto,
+} from "./profile";
 export { getDashboard } from "./dashboard";
 export { searchProducts } from "@/lib/mocks/search";
 export { findRelayPoints, getDeliveryQuote } from "@/lib/mocks/delivery";

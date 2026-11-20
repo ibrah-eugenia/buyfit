@@ -1,9 +1,13 @@
 import { sizeEquivalentLabel, type ProductMatch } from "@buyfit/shared";
 import { useEffect, useState } from "react";
+import { openWeb } from "@/lib/account";
+import { api } from "@/lib/api";
 import { startPurchase } from "@/lib/purchase";
 import { isHandoffStore } from "@/lib/stores";
 import type { Piece } from "./Home";
-import { Spinner } from "./Spinner";
+import { Lightbox } from "./Lightbox";
+import { LoadingDots } from "./Spinner";
+import { TryOnViewer, type Fitting } from "./TryOnViewer";
 
 export type SearchState =
   | { kind: "idle" }
@@ -37,20 +41,61 @@ export function Results({
   const meta = {
     ...(item?.genre ? { genre: item.genre } : {}),
     ...(item?.categorie ? { categorie: item.categorie } : {}),
+    ...(item?.couleur ? { couleur: item.couleur } : {}),
   };
-  const equivalent = size ? sizeEquivalentLabel(size, meta) : "";
-  const buy = (p: ProductMatch) => void startPurchase(p, size ?? "M", userId, meta);
+  // Entre deux tailles (« M/L » dans le compte) : l'agent prend la première, l'autre reste affichée.
+  const mainSize = size?.split("/")[0] || null;
+  const equivalent = mainSize ? sizeEquivalentLabel(mainSize, meta) : "";
+  const buy = (p: ProductMatch) => void startPurchase(p, mainSize ?? "M", userId, meta);
+  const [fittings, setFittings] = useState<Record<string, Fitting>>({});
+  /** Essayage 2D sur le mannequin du compte (gardé quand on change d'article). */
+  const tryOn = async (p: ProductMatch, force = false) => {
+    const cur = fittings[p.id]?.kind;
+    if (!force && (cur === "loading" || cur === "ready")) return;
+    setFittings((f) => ({ ...f, [p.id]: { kind: "loading" } }));
+    try {
+      const r = await api.tryOn({
+        userId,
+        garmentImageUrl: p.imageUrl,
+        garmentName: `${p.marque} - ${p.nom}`,
+        productUrl: p.url,
+      });
+      setFittings((f) => ({
+        ...f,
+        [p.id]: { kind: "ready", url: r.resultImageUrl, ...(r.zone ? { zone: r.zone } : {}) },
+      }));
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      setFittings((f) => ({ ...f, [p.id]: { kind: "error", message } }));
+    }
+  };
+  const [trying, setTrying] = useState(false);
+  const [pieceZoom, setPieceZoom] = useState(false);
   return (
-    <div className="screen">
+    <div className={`screen${trying ? " is-trying" : ""}`}>
       <div className="content">
         <div className="piece">
-          <img className="thumb" src={piece.cropUrl} alt="Pièce sélectionnée" />
+          <button
+            type="button"
+            className="thumb-btn"
+            aria-label="Voir la pièce sélectionnée en plein écran"
+            onClick={() => setPieceZoom(true)}
+          >
+            <img className="thumb" src={piece.cropUrl} alt="Pièce sélectionnée" />
+          </button>
+          {pieceZoom && (
+            <Lightbox
+              src={piece.cropUrl}
+              alt="Pièce sélectionnée"
+              onClose={() => setPieceZoom(false)}
+            />
+          )}
           <div>
             <div className="piece-name">
               {piece.kind === "ready"
                 ? piece.item.nom
                 : piece.kind === "loading"
-                  ? "Analyse de la pièce…"
+                  ? "Pièce sélectionnée"
                   : "Pièce non reconnue"}
             </div>
             {size && piece.kind === "ready" && (
@@ -76,19 +121,18 @@ export function Results({
               key={search.resultats.map((r) => r.id).join()}
               items={search.resultats}
               onBuy={buy}
+              fittings={fittings}
+              onTryOn={(p, force) => void tryOn(p, force)}
+              categorie={item?.categorie}
+              onTryingChange={setTrying}
               sizeNote={size ? `Taille ${size}${equivalent ? ` (${equivalent})` : ""}` : ""}
             />
           ) : (
-            <Status text="Aucun article assez ressemblant chez Zara, Mango ou Uniqlo." />
+            <Status text="Aucun article assez ressemblant chez Zara, Uniqlo, Mango ou Bershka." />
           )
         ) : (
           <div className="status">
-            <Spinner large />
-            <p>
-              {piece.kind === "loading"
-                ? "On reconnaît la pièce…"
-                : "Recherche chez Zara, Mango et Uniqlo…"}
-            </p>
+            <LoadingDots />
           </div>
         )}
       </div>
@@ -126,14 +170,27 @@ function Status({
 function Carousel({
   items,
   onBuy,
+  fittings,
+  onTryOn,
+  categorie,
+  onTryingChange,
   sizeNote,
 }: {
   items: ProductMatch[];
   onBuy: (p: ProductMatch) => void;
+  fittings: Record<string, Fitting>;
+  onTryOn: (p: ProductMatch, force?: boolean) => void;
+  categorie?: string | undefined;
+  onTryingChange: (trying: boolean) => void;
   sizeNote: string;
 }) {
   const [i, setI] = useState(0);
+  const [onMe, setOnMe] = useState<Record<string, boolean>>({});
+  const [zoom, setZoom] = useState(false);
   const p = items[Math.min(i, items.length - 1)]!;
+  const fitting = fittings[p.id];
+  const showMe = !!onMe[p.id] && !!fitting;
+  useEffect(() => onTryingChange(showMe), [showMe, onTryingChange]);
   const go = (d: number) => setI((cur) => (cur + d + items.length) % items.length);
 
   // Flèches du clavier.
@@ -164,10 +221,28 @@ function Carousel({
           </button>
         )}
         <article key={p.id} className="slide">
-          <a className="slide-media" href={p.url} target="_blank" rel="noreferrer">
-            <img src={p.imageUrl} alt={p.nom} />
-            <span className="store">{p.marque}</span>
-          </a>
+          {showMe ? (
+            <TryOnViewer
+              product={p}
+              categorie={categorie}
+              fitting={fitting}
+              onRetry={() => onTryOn(p, true)}
+              onEditAvatar={() => openWeb("/settings?section=photos")}
+            />
+          ) : (
+            <button
+              type="button"
+              className="slide-media"
+              aria-label={`Voir ${p.nom} en plein écran`}
+              onClick={() => setZoom(true)}
+            >
+              <img src={p.imageUrl} alt={p.nom} />
+              <span className="store">{p.marque}</span>
+            </button>
+          )}
+          {zoom && !showMe && (
+            <Lightbox src={p.imageUrl} alt={p.nom} onClose={() => setZoom(false)} />
+          )}
           <div className="slide-body">
             <div className="slide-name">{p.nom}</div>
             <div className="slide-foot">
@@ -179,15 +254,37 @@ function Carousel({
             {isHandoffStore(p.marque) ? (
               // Magasin qui bloque les agents : l'utilisateur finit l'achat sur le site.
               <a className="btn primary buy" href={p.url} target="_blank" rel="noreferrer">
-                Acheter sur {p.marque} <ExternalIcon />
+                Ajouter sur {p.marque} <ExternalIcon />
               </a>
             ) : (
-              <button type="button" className="btn primary buy" onClick={() => onBuy(p)}>
-                Acheter
-              </button>
+              <div className="buy-row">
+                {showMe ? (
+                  <button
+                    type="button"
+                    className="btn secondary"
+                    onClick={() => setOnMe((m) => ({ ...m, [p.id]: false }))}
+                  >
+                    Voir l'article
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn secondary try-btn"
+                    onClick={() => {
+                      setOnMe((m) => ({ ...m, [p.id]: true }));
+                      onTryOn(p);
+                    }}
+                  >
+                    <SparkIcon /> Essayer
+                  </button>
+                )}
+                <button type="button" className="btn primary" onClick={() => onBuy(p)}>
+                  Ajouter au panier
+                </button>
+              </div>
             )}
             {isHandoffStore(p.marque) && sizeNote && (
-              <p className="handoff-note">{sizeNote} · achat à finaliser sur le site</p>
+              <p className="handoff-note">{sizeNote} · à ajouter sur le site</p>
             )}
           </div>
         </article>
@@ -228,6 +325,12 @@ const icon = {
 const Chevron = ({ dir }: { dir: "left" | "right" }) => (
   <svg {...icon} width={20} height={20}>
     <path d={dir === "left" ? "M15 6l-6 6 6 6" : "M9 6l6 6-6 6"} />
+  </svg>
+);
+const SparkIcon = () => (
+  <svg {...icon} width={16} height={16}>
+    <path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z" />
+    <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" />
   </svg>
 );
 const ExternalIcon = () => (

@@ -1,5 +1,5 @@
 /**
- * Client de apps/api. L'extension ne parle QU'À apps/api : aucune clé tierce ici.
+ * Client BuyFit. Le site transmet la session des appels photo et recherche à apps/api.
  * WXT_USE_MOCK_API=true → réponses simulées (dev sans back-end).
  */
 import {
@@ -25,6 +25,7 @@ import {
 } from "@buyfit/shared";
 import type { z } from "zod";
 import { mockApi } from "./mock-api";
+import { webFetch } from "./web-fetch";
 
 const BASE_URL = import.meta.env.WXT_API_URL;
 export const USE_MOCK = import.meta.env.WXT_USE_MOCK_API;
@@ -34,12 +35,39 @@ async function request<S extends z.ZodType>(
   path: string,
   schema: S,
   body?: unknown,
+  account = false,
 ): Promise<z.infer<S>> {
-  const res = await fetch(new URL(path, BASE_URL), {
-    method,
-    headers: body ? { "Content-Type": "application/json" } : {},
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  if (account) {
+    // Compte : via le service worker, qui a les cookies du site (voir web-fetch.ts).
+    const res = await webFetch("/api/fitting" + path, method as "GET" | "POST", body);
+    if (res.status === 401) throw new Error("Connecte-toi à BuyFit (bouton en haut du panneau).");
+    if (res.status < 200 || res.status >= 300) {
+      const err = ApiErrorSchema.safeParse(res.json);
+      throw new Error(err.success ? err.data.error : `HTTP ${res.status}`);
+    }
+    return schema.parse(res.json);
+  }
+  let res: Response;
+  try {
+    res = await fetch(
+      new URL(
+        account ? "/api/fitting" + path : path,
+        account ? import.meta.env.WXT_WEB_URL : BASE_URL,
+      ),
+      {
+        method,
+        credentials: account ? "include" : "omit",
+        headers: {
+          ...(body ? { "Content-Type": "application/json" } : {}),
+          ...(account ? { "X-BuyFit-Request": "fitting" } : {}),
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      },
+    );
+  } catch {
+    // Pas de réponse du tout (« Failed to fetch ») : serveur éteint ou URL injoignable.
+    throw new Error("Serveur BuyFit injoignable. Vérifie que l'API est lancée, puis réessaie.");
+  }
   const json: unknown = await res.json().catch(() => null);
   if (!res.ok) {
     const err = ApiErrorSchema.safeParse(json);
@@ -53,7 +81,7 @@ export interface BuyFitApi {
   identify(req: IdentifyRequest): Promise<IdentifiedItem>;
   /** POST /serp : Google Shopping brut via Bright Data SERP pour les mots-clés. */
   serp(req: SerpRequest): Promise<SerpResponse>;
-  /** POST /search : Zara / Mango / Uniqlo en parallèle + filtre IA de similarité. */
+  /** POST /search : Zara / Uniqlo / Mango / Bershka en parallèle + filtre IA de similarité. */
   search(req: SearchRequest): Promise<SearchResponse>;
   capture(req: CaptureRequest): Promise<ProductMatch[]>;
   tryOn(req: TryOnApiRequest): Promise<TryOnResult>;
@@ -67,8 +95,18 @@ const httpApi: BuyFitApi = {
   identify: (req) => request("POST", "/identify", IdentifiedItemSchema, req),
   serp: (req) => request("POST", "/serp", SerpResponseSchema, req),
   search: (req) => request("POST", "/search", SearchResponseSchema, req),
-  capture: (req) => request("POST", "/capture", CaptureResponseSchema, req),
-  tryOn: (req) => request("POST", "/tryon", TryOnResultSchema, req),
+  capture: async (req) => {
+    // Keep unauthenticated demo capture usable; fitting always needs an account.
+    const response = await webFetch("/api/fitting/capture", "POST", req).catch(() => null);
+    if (!response || response.status === 401)
+      return request("POST", "/capture", CaptureResponseSchema, req);
+    if (response.status < 200 || response.status >= 300)
+      throw new Error(
+        ApiErrorSchema.safeParse(response.json).data?.error ?? "Recherche indisponible.",
+      );
+    return CaptureResponseSchema.parse(response.json);
+  },
+  tryOn: (req) => request("POST", "/tryon", TryOnResultSchema, req, true),
   order: (req) => request("POST", "/order", OrderStatusSchema, req),
   getOrder: (id) => request("GET", `/order/${encodeURIComponent(id)}`, OrderStatusSchema),
   confirmOrder: (id, livraison) =>

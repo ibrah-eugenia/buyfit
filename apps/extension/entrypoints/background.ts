@@ -7,6 +7,7 @@ import {
   type ResolveImageResponse,
 } from "@/lib/messages";
 import { upgradePinimgUrl } from "@/lib/pinimg";
+import { runWebFetch, type WebFetchMessage } from "@/lib/web-fetch";
 
 const MENU_ID = "buyfit-find-look";
 /** Même page que le side panel, en popup sous l'icône (navigateurs sans side panel, ex. Comet). */
@@ -30,6 +31,13 @@ export default defineBackground(() => {
   });
 
   void setupOpening();
+
+  // Appels au site avec la session de l'utilisateur (le panneau en iframe n'a pas les cookies).
+  browser.runtime.onMessage.addListener((msg: unknown, sender) => {
+    const m = msg as WebFetchMessage;
+    if (m?.type !== "buyfit:web-fetch" || sender.id !== browser.runtime.id) return undefined;
+    return runWebFetch(m);
+  });
 
   // Notifications d'achat (lib/purchase.ts) : id « buyfit-order|<tabId>|<ts> ».
   browser.notifications?.onClicked.addListener((id) => {

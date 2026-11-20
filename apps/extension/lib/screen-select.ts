@@ -25,13 +25,13 @@ const CSS = `
   box-shadow: 0 8px 24px rgba(17,17,17,.3); white-space: nowrap; }
 .hint b { color: #F3D6DB; }
 .hint.error { background: #B3261E; }
-.dot { position: fixed; left: 0; top: 0; width: 12px; height: 12px; margin: -6px 0 0 -6px;
-  border-radius: 50%; background: #fff; pointer-events: none; opacity: 0; will-change: transform;
-  box-shadow: 0 0 0 2px #7A1F2B, 0 0 10px 4px rgba(122,31,43,.85), 0 0 24px 10px rgba(122,31,43,.45);
-  transition: opacity .12s ease, width .12s ease, height .12s ease, margin .12s ease; }
-.dot.on { opacity: 1; }
-.dot.down { width: 8px; height: 8px; margin: -4px 0 0 -4px; }
-@media (prefers-reduced-motion: reduce) { .dot { transition: none; } }
+.hand { position: fixed; left: 0; top: 0; width: 16px; height: 20px; margin: -1px 0 0 -6px;
+  pointer-events: none; opacity: 0; will-change: transform; transform-origin: 6px 1px;
+  filter: drop-shadow(0 1px 1.5px rgba(17,17,17,.55)); transition: opacity .12s ease; }
+.hand.on { opacity: 1; }
+.hand svg { display: block; width: 100%; height: 100%; transition: transform .1s ease; transform-origin: 6px 1px; }
+.hand.down svg { transform: scale(.85); }
+@media (prefers-reduced-motion: reduce) { .hand, .hand svg { transition: none; } }
 .rect { position: fixed; border: 2px solid #fff; border-radius: 8px; pointer-events: none;
   box-shadow: 0 0 0 2px #7A1F2B, 0 0 0 9999px rgba(17,17,17,.45); }
 `;
@@ -43,19 +43,19 @@ export function startScreenSelection(): Promise<ScreenSelection | null> {
     root.innerHTML = `<style>${CSS}</style>
       <div class="veil" role="dialog" aria-label="Sélection d'une pièce">
         <div class="hint">Entoure la pièce qui t'intéresse · <b>Échap</b> pour annuler</div>
-        <div class="dot" aria-hidden="true"></div>
+        <div class="hand" aria-hidden="true"><svg viewBox="0 0 24 30" aria-hidden="true"><g fill="#fff" stroke="#111" stroke-width="1.5" stroke-linejoin="round"><rect x="6" y="11" width="16" height="12.5" rx="4.5"/><rect x="2.2" y="13" width="7.5" height="4.6" rx="2.3" transform="rotate(-28 6 15.3)"/><rect x="7" y="1" width="5" height="15.5" rx="2.5"/><rect x="11.6" y="9.4" width="4" height="6.4" rx="2"/><rect x="15.2" y="10" width="3.8" height="5.8" rx="1.9"/><rect x="18.5" y="11" width="3.4" height="5.2" rx="1.7"/><rect x="7.8" y="22.5" width="12.6" height="6" rx="1.6"/><path d="M8.6 25.5h11" fill="none" stroke-width="1"/></g></svg></div>
       </div>`;
     document.documentElement.append(host);
     const veil = root.querySelector<HTMLDivElement>(".veil")!;
     const hint = root.querySelector<HTMLDivElement>(".hint")!;
-    // Curseur : point blanc lumineux à halo bordeaux (le curseur système est masqué).
-    const dot = root.querySelector<HTMLDivElement>(".dot")!;
-    const moveDot = (e: PointerEvent) => {
-      dot.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
-      dot.classList.add("on");
+    // Curseur : petite main gantée blanche, index pointé (le curseur système est masqué).
+    const hand = root.querySelector<HTMLDivElement>(".hand")!;
+    const moveHand = (e: PointerEvent) => {
+      hand.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
+      hand.classList.add("on");
     };
-    veil.addEventListener("pointermove", moveDot);
-    veil.addEventListener("pointerleave", () => dot.classList.remove("on"));
+    veil.addEventListener("pointermove", moveHand);
+    veil.addEventListener("pointerleave", () => hand.classList.remove("on"));
     let rectEl: HTMLDivElement | null = null;
     let start: { x: number; y: number } | null = null;
 
@@ -86,12 +86,12 @@ export function startScreenSelection(): Promise<ScreenSelection | null> {
       if (e.button !== 0) return;
       veil.setPointerCapture(e.pointerId);
       start = { x: e.clientX, y: e.clientY };
-      dot.classList.add("down");
+      hand.classList.add("down");
       veil.classList.add("drawing");
       rectEl?.remove();
       rectEl = document.createElement("div");
       rectEl.className = "rect";
-      veil.insertBefore(rectEl, dot); // le point reste au-dessus du voile
+      veil.insertBefore(rectEl, hand); // la main reste au-dessus du voile
     });
     veil.addEventListener("pointermove", (e) => {
       if (!start || !rectEl) return;
@@ -107,7 +107,7 @@ export function startScreenSelection(): Promise<ScreenSelection | null> {
       if (!start) return;
       const b = box(e);
       start = null;
-      dot.classList.remove("down");
+      hand.classList.remove("down");
       veil.classList.remove("drawing");
       if (b.width < MIN_PX || b.height < MIN_PX) {
         rectEl?.remove();
