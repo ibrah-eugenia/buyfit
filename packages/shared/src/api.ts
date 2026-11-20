@@ -36,7 +36,7 @@ export const SerpResponseSchema = z.object({
 export type SerpResponse = z.infer<typeof SerpResponseSchema>;
 
 // POST /search : pièce identifiée → une recherche Google Shopping par magasin test
-// (Zara, Uniqlo), puis filtre IA de similarité visuelle avec la pièce sélectionnée.
+// (Zara, Uniqlo, Mango, Bershka), puis filtre IA de similarité visuelle avec la pièce sélectionnée.
 export const SearchRequestSchema = z.object({
   userId: z.string().min(1),
   requete: z.string().min(1).max(160),

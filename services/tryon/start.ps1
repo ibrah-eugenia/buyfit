@@ -14,9 +14,9 @@ $env:TRYON_MODE = "huggingface"
 $env:TRYON_ENGINE = "qwen"
 $env:HF_TOKEN = $values["HF_TOKEN"]
 $env:HF_SPACE_ID = "yisol/IDM-VTON"
-# Hôtes HTTPS autorisés pour les images : Pinterest, démo, photos produit Zara / Uniqlo,
-# et le projet Supabase (mannequins stockés dans le bucket privé).
-$hosts = @("i.pinimg.com", "images.unsplash.com", "static.zara.net", "image.uniqlo.com")
+# Hôtes HTTPS autorisés pour les images : Pinterest, démo, photos produit Zara / Uniqlo /
+# Mango / Bershka, et le projet Supabase (mannequins stockés dans le bucket privé).
+$hosts = @("i.pinimg.com", "images.unsplash.com", "static.zara.net", "image.uniqlo.com", "media.mango.com", "static.bershka.net")
 if ($values["SUPABASE_URL"]) { $hosts += ([Uri]$values["SUPABASE_URL"]).Host }
 $env:TRYON_IMAGE_HOSTS = $hosts -join ","
 

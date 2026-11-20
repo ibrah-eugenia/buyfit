@@ -306,7 +306,9 @@ class ResultStoreTests(unittest.TestCase):
                 store.save(RESULT)
             self.assertEqual(len(list(Path(directory).iterdir())), 20)
             self.assertIsNone(store.find("../../app.py"))
-            self.assertTrue(all((path.stat().st_mode & 0o777) == 0o600 for path in Path(directory).iterdir()))
+            # Windows ignore les droits Unix : la vérification n'a de sens que sous POSIX (Docker/Linux).
+            if os.name == "posix":
+                self.assertTrue(all((path.stat().st_mode & 0o777) == 0o600 for path in Path(directory).iterdir()))
 
     def test_rejects_non_images(self):
         with TemporaryDirectory() as directory:

@@ -9,7 +9,7 @@ export async function POST(
   { params }: { params: Promise<{ operation: string }> },
 ) {
   const { operation } = await params;
-  if (!["avatar", "tryon", "capture"].includes(operation))
+  if (!["avatar", "tryon", "capture", "identify", "search"].includes(operation))
     return new Response(null, { status: 404 });
   if (request.headers.get("X-BuyFit-Request") !== "fitting")
     return Response.json({ error: "Requête invalide." }, { status: 403 });

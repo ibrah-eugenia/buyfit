@@ -12,10 +12,15 @@ const HF_CHAT_URL = "https://router.huggingface.co/v1/chat/completions";
 const MIN_SCORE = 6;
 /**
  * Chaque magasin garde au moins son meilleur produit s'il atteint cette note (même type de
- * vêtement) : on préfère montrer Zara et Uniqlo qu'un seul magasin.
+ * vêtement) : on préfère montrer plusieurs magasins qu'un seul.
  */
 const MIN_SCORE_BEST_OF_STORE = 4;
 const IMAGE_TIMEOUT_MS = 4_000;
+/**
+ * Images notées par appel. Au-delà, le modèle sous-note les dernières (mesuré le 20/11/2026 :
+ * le même blazer noté 3/10 en 14e position, 7/10 en 2e). Les lots partent en parallèle.
+ */
+const BATCH = 8;
 const MODEL_TIMEOUT_MS = 20_000;
 
 const PROMPT = (
@@ -44,10 +49,17 @@ export async function filterBySimilarity(
     const usable = candidates.flatMap((p, i) => (images[i] ? [{ p, img: images[i] }] : []));
     if (!usable.length) return { resultats: candidates, filtreIA: false };
 
-    const scores = await scoreImages(
-      referenceDataUrl,
-      usable.map((u) => u.img),
-    );
+    const imgs = usable.map((u) => u.img);
+    const lots = Math.ceil(imgs.length / BATCH);
+    // Lots équilibrés (16 → 8 + 8, 12 → 6 + 6) plutôt qu'un dernier lot presque vide.
+    const size = Math.ceil(imgs.length / lots);
+    const scores = (
+      await Promise.all(
+        Array.from({ length: lots }, (_, i) =>
+          scoreImages(referenceDataUrl, imgs.slice(i * size, (i + 1) * size)),
+        ),
+      )
+    ).flat();
     const scored = usable
       .map(({ p }, i) => ({ ...p, score: Math.round(((scores[i] ?? 0) / 10) * 100) / 100 }))
       .sort((a, b) => b.score - a.score);

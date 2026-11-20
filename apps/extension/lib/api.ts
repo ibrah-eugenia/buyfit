@@ -81,7 +81,7 @@ export interface BuyFitApi {
   identify(req: IdentifyRequest): Promise<IdentifiedItem>;
   /** POST /serp : Google Shopping brut via Bright Data SERP pour les mots-clés. */
   serp(req: SerpRequest): Promise<SerpResponse>;
-  /** POST /search : Zara / Uniqlo en parallèle + filtre IA de similarité. */
+  /** POST /search : Zara / Uniqlo / Mango / Bershka en parallèle + filtre IA de similarité. */
   search(req: SearchRequest): Promise<SearchResponse>;
   capture(req: CaptureRequest): Promise<ProductMatch[]>;
   tryOn(req: TryOnApiRequest): Promise<TryOnResult>;

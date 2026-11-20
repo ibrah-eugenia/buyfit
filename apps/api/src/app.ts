@@ -84,6 +84,30 @@ async function requireProfile(userId: string) {
   return profile;
 }
 
+/**
+ * Corps d'une requête faite soit par l'extension (userId dans le corps), soit par le site via
+ * /api/fitting (jeton Supabase transmis) : l'utilisateur vient alors du jeton, pas du corps.
+ */
+async function accountBody<S extends z.ZodType<{ userId: string }>>(
+  c: Context,
+  schema: S,
+): Promise<z.infer<S>> {
+  const auth = c.req.header("Authorization");
+  if (!auth) {
+    const req = await body(c, schema);
+    await requireProfile(req.userId);
+    return req;
+  }
+  // Sans Supabase côté serveur (dev), le jeton ne peut pas être vérifié : profil de démo.
+  const userId = config.mocks.supabase ? "demo-user" : await fittingUser(auth);
+  const json: unknown = await c.req.json().catch(() => {
+    throw new HttpError(400, "Corps JSON invalide");
+  });
+  const parsed = schema.safeParse({ ...(json as object), userId });
+  if (!parsed.success) throw new HttpError(400, "Requête invalide", parsed.error.issues);
+  return parsed.data;
+}
+
 async function requireOrder(id: string) {
   const order = await call("supabase", () => getOrder(id));
   if (!order) throw new HttpError(404, `Commande ${id} introuvable`);
@@ -161,8 +185,7 @@ app.post("/capture", async (c) => {
 
 // POST /identify → IdentifiedItem (zone sélectionnée → nom de l'article, modèle HF)
 app.post("/identify", async (c) => {
-  const req = await body(c, IdentifyRequestSchema);
-  await requireProfile(req.userId);
+  const req = await accountBody(c, IdentifyRequestSchema);
   const item = await call("vision", () => identifyItem(req.imageDataUrl));
   return c.json(IdentifiedItemSchema.parse(item));
 });
@@ -175,10 +198,9 @@ app.post("/serp", async (c) => {
   return c.json(SerpResponseSchema.parse(res));
 });
 
-// POST /search → { resultats, filtreIA } (Zara / Uniqlo + filtre IA de similarité)
+// POST /search → { resultats, filtreIA } (Zara / Uniqlo / Mango / Bershka + filtre IA de similarité)
 app.post("/search", async (c) => {
-  const req = await body(c, SearchRequestSchema);
-  await requireProfile(req.userId);
+  const req = await accountBody(c, SearchRequestSchema);
   const res = await call("search", () => searchStores(req));
   return c.json(SearchResponseSchema.parse(res));
 });

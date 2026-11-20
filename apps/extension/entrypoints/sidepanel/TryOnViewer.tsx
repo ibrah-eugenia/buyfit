@@ -1,5 +1,6 @@
 import type { ProductMatch } from "@buyfit/shared";
 import { useEffect, useRef, useState, type PointerEvent, type WheelEvent } from "react";
+import { Lightbox } from "./Lightbox";
 
 export type Fitting =
   | { kind: "loading" }
@@ -38,7 +39,7 @@ const LOADING_STEPS = [
 
 /**
  * Essayage 2D : arrive cadré sur la pièce essayée, puis dézoome en douceur sur la tenue entière.
- * Molette / pincement pour zoomer, glisser pour se déplacer, double-clic pour basculer.
+ * Molette / pincement pour zoomer, glisser pour se déplacer, clic pour le plein écran.
  */
 export function TryOnViewer({
   product,
@@ -122,6 +123,9 @@ function FittingImage({
   const [view, setView] = useState<View>(piece);
   const [animate, setAnimate] = useState(true);
   const drag = useRef<{ px: number; py: number; x: number; y: number } | null>(null);
+  /** Position du dernier appui : un clic sans déplacement ouvre le plein écran. */
+  const press = useRef<{ x: number; y: number } | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
   const stage = useRef<HTMLDivElement>(null);
 
   // Révélation : net sur la pièce, puis dézoom automatique sur la tenue entière.
@@ -152,6 +156,7 @@ function FittingImage({
     setView(scale === 1 ? full : { scale, x, y });
   };
   const onPointerDown = (e: PointerEvent) => {
+    press.current = { x: e.clientX, y: e.clientY };
     if (!zoomed) return;
     (e.target as Element).setPointerCapture?.(e.pointerId);
     drag.current = { px: e.clientX, py: e.clientY, x: view.x, y: view.y };
@@ -182,7 +187,12 @@ function FittingImage({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        onDoubleClick={() => goTo(zoomed ? full : piece)}
+        onClick={(e) => {
+          const p = press.current;
+          if ((e.target as Element).closest("button")) return;
+          if (p && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 5) return; // glissé
+          setFullscreen(true);
+        }}
       >
         <img
           src={url}
@@ -202,6 +212,13 @@ function FittingImage({
           Modifier mon mannequin
         </button>
       </div>
+      {fullscreen && (
+        <Lightbox
+          src={url}
+          alt={`${product.nom} essayé sur ton mannequin`}
+          onClose={() => setFullscreen(false)}
+        />
+      )}
       <div className="fit-controls" role="group" aria-label="Zoom">
         <button type="button" aria-pressed={zoomed} onClick={() => goTo(piece)}>
           Zoom sur la pièce

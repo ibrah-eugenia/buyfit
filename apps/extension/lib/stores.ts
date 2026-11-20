@@ -10,6 +10,8 @@ const HANDOFF_STORES = new Set<string>([]);
 const CART_URLS: Record<string, string> = {
   zara: "https://www.zara.com/fr/fr/shop/cart",
   uniqlo: "https://www.uniqlo.com/fr/fr/cart",
+  mango: "https://shop.mango.com/fr/fr/cart",
+  bershka: "https://www.bershka.com/fr/cart.html",
 };
 export const cartUrl = (marque: string, fallback: string) =>
   CART_URLS[marque.trim().toLowerCase()] ?? fallback;

@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { startPurchase } from "@/lib/purchase";
 import { isHandoffStore } from "@/lib/stores";
 import type { Piece } from "./Home";
+import { Lightbox } from "./Lightbox";
 import { LoadingDots } from "./Spinner";
 import { TryOnViewer, type Fitting } from "./TryOnViewer";
 
@@ -68,11 +69,26 @@ export function Results({
     }
   };
   const [trying, setTrying] = useState(false);
+  const [pieceZoom, setPieceZoom] = useState(false);
   return (
     <div className={`screen${trying ? " is-trying" : ""}`}>
       <div className="content">
         <div className="piece">
-          <img className="thumb" src={piece.cropUrl} alt="Pièce sélectionnée" />
+          <button
+            type="button"
+            className="thumb-btn"
+            aria-label="Voir la pièce sélectionnée en plein écran"
+            onClick={() => setPieceZoom(true)}
+          >
+            <img className="thumb" src={piece.cropUrl} alt="Pièce sélectionnée" />
+          </button>
+          {pieceZoom && (
+            <Lightbox
+              src={piece.cropUrl}
+              alt="Pièce sélectionnée"
+              onClose={() => setPieceZoom(false)}
+            />
+          )}
           <div>
             <div className="piece-name">
               {piece.kind === "ready"
@@ -111,7 +127,7 @@ export function Results({
               sizeNote={size ? `Taille ${size}${equivalent ? ` (${equivalent})` : ""}` : ""}
             />
           ) : (
-            <Status text="Aucun article assez ressemblant chez Zara ou Uniqlo." />
+            <Status text="Aucun article assez ressemblant chez Zara, Uniqlo, Mango ou Bershka." />
           )
         ) : (
           <div className="status">
@@ -169,6 +185,7 @@ function Carousel({
 }) {
   const [i, setI] = useState(0);
   const [onMe, setOnMe] = useState<Record<string, boolean>>({});
+  const [zoom, setZoom] = useState(false);
   const p = items[Math.min(i, items.length - 1)]!;
   const fitting = fittings[p.id];
   const showMe = !!onMe[p.id] && !!fitting;
@@ -212,10 +229,18 @@ function Carousel({
               onEditAvatar={() => openWeb("/settings?section=photos")}
             />
           ) : (
-            <a className="slide-media" href={p.url} target="_blank" rel="noreferrer">
+            <button
+              type="button"
+              className="slide-media"
+              aria-label={`Voir ${p.nom} en plein écran`}
+              onClick={() => setZoom(true)}
+            >
               <img src={p.imageUrl} alt={p.nom} />
               <span className="store">{p.marque}</span>
-            </a>
+            </button>
+          )}
+          {zoom && !showMe && (
+            <Lightbox src={p.imageUrl} alt={p.nom} onClose={() => setZoom(false)} />
           )}
           <div className="slide-body">
             <div className="slide-name">{p.nom}</div>

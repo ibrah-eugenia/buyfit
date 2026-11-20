@@ -1,14 +1,17 @@
 /**
  * Recherche par magasin test : la requête de la pièce identifiée (+ genre) est lancée en
- * parallèle sur Google Images, restreinte au site de chaque magasin (Zara, Uniqlo),
+ * parallèle sur Google Images, restreinte au site de chaque magasin (Zara, Uniqlo, Mango,
+ * Bershka),
  * via Bright Data. On ne garde que les fiches produit (une par article, version FR, bon genre),
  * puis le filtre IA de similarité écarte celles dont la couleur ou la coupe ne correspond pas.
  *
  * Pourquoi Google Images plutôt que Shopping : liens directs vers la fiche du magasin, photo
  * officielle HD, titres avec la couleur, et `site:` évite les revendeurs et le rayon femme.
  * Prix : Google Images ne le donne pas ; on le lit directement sur la fiche produit
- * (Zara : JSON `?ajax=true`, Uniqlo : données de la page) ; introuvable à temps → prix = 0,
- * l'extension affiche « Voir le prix ». (Mango retiré le 19/11/2026 : son site bloque les agents.)
+ * (Zara : JSON `?ajax=true`, Uniqlo : données de la page, Mango : microdonnées `itemprop`) ;
+ * Bershka (page vide côté serveur) ou introuvable à temps → prix = 0, « Voir le prix ».
+ * Mango (retiré le 19/11/2026, son site bloque le paiement par agent) revient le 20/11/2026 :
+ * l'agent ne fait qu'ajouter au panier, le paiement reste à l'utilisateur.
  *
  * Budget total : SEARCH_BUDGET_MS (20 s). Magasins coupés à STORE_DEADLINE_MS, puis filtre IA
  * et prix en parallèle dans le temps restant ; filtre trop lent → résultats non filtrés.
@@ -35,6 +38,8 @@ type Store = {
   product: RegExp;
   /** Identifiant de l'article dans l'URL : sert à supprimer les doublons (pays, couleurs). */
   id: RegExp;
+  /** Ramène le lien vers la boutique française (par défaut : /xx/fr/ → /fr/fr/). */
+  french?: (url: string) => string;
 };
 
 export const STORES: Store[] = [
@@ -45,9 +50,28 @@ export const STORES: Store[] = [
     product: /\/products\/E?\d{6}/,
     id: /\/products\/(E?\d{6})/,
   },
+  {
+    // https://shop.mango.com/fr/fr/p/femme/blazer/ajustees/blazer-…/37065841/99/00
+    name: "Mango",
+    site: "shop.mango.com",
+    product: /\/p\/.+\/\d{8}(?:[/?]|$)/,
+    id: /\/(\d{8})(?:[/?]|$)/,
+  },
+  {
+    // https://www.bershka.com/fr/blazer-croisé-à-boutons-c0p247647657.html?colorId=800
+    name: "Bershka",
+    site: "bershka.com",
+    product: /-c0p\d{6,}\.html/,
+    id: /-c0p(\d{6,})\.html/,
+    // Pays avec ou sans langue (/ca/fr/, /dz/, /fr/) → boutique France (/fr/).
+    french: (url) => url.replace(/^(https:\/\/[^/]+)\/(?:[a-z]{2}\/){1,2}/, "$1/fr/"),
+  },
 ];
-/** Candidats par magasin envoyés au filtre IA : plus = meilleur rappel, mais plus lent. */
-const PER_STORE = 6;
+/**
+ * Candidats par magasin envoyés au filtre IA : plus = meilleur rappel, mais plus lent.
+ * 4 magasins × 4 = 16 images, proche des 12 (2 × 6) d'avant pour la latence du filtre.
+ */
+const PER_STORE = 4;
 /** Temps maximum d'une recherche, de la requête à la réponse. */
 const SEARCH_BUDGET_MS = 19_500;
 /**
@@ -80,7 +104,9 @@ async function searchOnce(req: SearchRequest): Promise<SearchResponse> {
   const perStore = await Promise.all(
     STORES.map((s) => withDeadline(searchStore(s, base, req.genre), STORE_DEADLINE_MS, s.name)),
   );
-  const hits = perStore.flatMap((items) => items.slice(0, PER_STORE));
+  // Magasins en alternance (Zara 1, Uniqlo 1, Mango 1, Bershka 1, Zara 2…) : le modèle note
+  // moins bien les dernières images d'une longue liste, aucun magasin ne doit être toujours en fin.
+  const hits = interleave(perStore.map((items) => items.slice(0, PER_STORE)));
   const products = hits.map((h) => h.product);
   if (!products.length) return { resultats: [], filtreIA: false };
 
@@ -122,6 +148,14 @@ async function searchOnce(req: SearchRequest): Promise<SearchResponse> {
       return prix ? { ...p, prix, devise: "EUR" as const } : p;
     }),
   };
+}
+
+/** [[a1, a2], [b1], [c1, c2]] → [a1, b1, c1, a2, c2]. */
+export function interleave<T>(lists: T[][]): T[] {
+  const out: T[] = [];
+  for (let i = 0; i < Math.max(0, ...lists.map((l) => l.length)); i++)
+    for (const l of lists) if (i < l.length) out.push(l[i]!);
+  return out;
 }
 
 /** Résout `p`, ou `fallback` si `p` dépasse `ms`. */
@@ -173,6 +207,11 @@ async function detailsOf(p: ProductMatch): Promise<Details | null> {
     const html = await fetchText(p.url);
     return { prix: uniqloPrice(html), rayon: uniqloRayon(html) };
   }
+  if (p.marque === "Mango") {
+    // Mango répond souvent 429 aux requêtes serveur : le rayon (dans l'URL) reste connu.
+    const html = await fetchText(p.url).catch(() => null);
+    return { prix: html ? mangoPrice(html) : null, rayon: mangoRayon(p.url) };
+  }
   return null;
 }
 
@@ -199,6 +238,24 @@ export function uniqloRayon(html: string): Rayon | null {
   if (g === "UNISEX") return "mixte";
   if (g === "KIDS" || g === "BABY" || g === "ENFANT") return "enfant";
   return null;
+}
+
+/** Prix Mango dans les microdonnées : « itemprop="price" content="69.99" ». */
+export function mangoPrice(html: string): number | null {
+  const v = html.match(/itemprop="price"\s+content="([\d.]+)"/)?.[1];
+  return v ? Number(v) : null;
+}
+
+/** Rayon Mango lu dans l'URL : /p/femme/…, /p/homme/…, /p/enfants/… */
+export function mangoRayon(url: string): Rayon | null {
+  const s = url.match(/\/p\/([a-z]+)\//)?.[1];
+  return s === "homme"
+    ? "homme"
+    : s === "femme"
+      ? "femme"
+      : s?.startsWith("enfant")
+        ? "enfant"
+        : null;
 }
 
 /** Fiche Zara en JSON : même URL avec `?ajax=true` (paramètres de coloris conservés). */
@@ -288,10 +345,10 @@ export function pickProducts(
       product: {
         id: `img-${createHash("sha1").update(`${store.name}|${key}`).digest("hex").slice(0, 12)}`,
         marque: store.name,
-        nom: cleanTitle(h.title),
+        nom: /^[\w.-]+\.(?:net|com)\//.test(h.title) ? titleFromUrl(h.link) : cleanTitle(h.title),
         prix: 0, // inconnu : Google Images ne donne pas le prix
         devise: "EUR",
-        url: toFrench(h.link),
+        url: (store.french ?? toFrench)(h.link),
         imageUrl: h.image,
         tailleDisponibles: [],
         score: Math.max(0.3, 0.8 - rank * 0.01),
@@ -303,6 +360,18 @@ export function pickProducts(
 
 /** /be/fr/, /ne/fr/… → /fr/fr/ : boutique française (prix et livraison en France). */
 const toFrench = (url: string) => url.replace(/^(https:\/\/[^/]+)\/[a-z]{2}\/fr\//, "$1/fr/fr/");
+
+/**
+ * Nom tiré de l'URL quand Google donne un chemin d'image au lieu d'un titre (Bershka) :
+ * « …/blazer-crois%C3%A9-%C3%A0-boutons-c0p243093353.html » → « Blazer croisé à boutons ».
+ */
+export function titleFromUrl(url: string): string {
+  const slug = decodeURIComponent(new URL(url).pathname.split("/").pop() ?? "")
+    .replace(/-c0p\d+\.html$|\.html$/, "")
+    .replace(/-/g, " ")
+    .trim();
+  return slug ? slug.charAt(0).toUpperCase() + slug.slice(1) : "Article";
+}
 
 /** « VESTE À REVERS CROISÉS - Beige clair - 46 | ZARA France » → « Veste à revers croisés - Beige clair ». */
 export function cleanTitle(title: string): string {

@@ -15,6 +15,7 @@ export const SUPPORTED_MERCHANTS = [
   { marchand: "COS", domaine: "cos.com" },
   { marchand: "Uniqlo", domaine: "uniqlo.com" },
   { marchand: "H&M", domaine: "hm.com" },
+  { marchand: "Bershka", domaine: "bershka.com" },
 ] as const;
 
 export type SupportedDomain = (typeof SUPPORTED_MERCHANTS)[number]["domaine"];

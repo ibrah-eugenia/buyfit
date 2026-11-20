@@ -53,7 +53,7 @@ const flowOf = (pinUrl: string): Flow => {
 /**
  * Accueil : l'épingle de l'onglet actif est chargée automatiquement (et suivie quand l'onglet
  * change). L'utilisateur choisit sa taille puis entoure une pièce ; la recherche
- * Zara / Uniqlo démarre seule et s'affiche sur l'écran de résultats.
+ * Zara / Uniqlo / Mango / Bershka démarre seule et s'affiche sur l'écran de résultats.
  */
 export function Home({ userId, account }: { userId: string; account?: Account }) {
   const purchase = usePurchase();

@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { useCart } from "@/components/app-providers";
 import { SizeSelect } from "@/components/cart/size-select";
+import { ImageLightbox } from "@/components/image-lightbox";
 import { ProductImage } from "@/components/product-image";
 import { Button } from "@/components/ui/button";
 import { tryOnGarment } from "@/lib/data/fitting";
@@ -25,6 +26,7 @@ export function ResultCard({
   const [vue, setVue] = useState<"produit" | "essayage">("produit");
   const [image, setImage] = useState<string>();
   const [pending, setPending] = useState(false);
+  const [pleinEcran, setPleinEcran] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const pourcentage = Math.round(result.score * 100);
   // The web demo catalogue has placeholder URLs; let users supply the real garment.
@@ -53,29 +55,47 @@ export function ResultCard({
     }
   }
 
+  // Image visible dans la carte (essayage ou produit), sauf visuel de remplacement.
+  const imageAffichee =
+    vue === "essayage" && image ? image : needsFile ? undefined : result.imageUrl;
+
   return (
     <article className="group/carte flex flex-col" aria-labelledby={`titre-${result.id}`}>
       <div className="relative aspect-[4/5] overflow-hidden rounded-[24px] bg-linen">
-        {vue === "essayage" && image ? (
-          <>
-            <img
-              src={image}
-              alt={`Essayage de ${result.nom} sur ton avatar`}
-              className="size-full object-cover"
+        <button
+          type="button"
+          onClick={() => setPleinEcran(true)}
+          disabled={!imageAffichee}
+          aria-label="Voir l'image en plein écran"
+          className="block size-full cursor-zoom-in focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset disabled:cursor-default"
+        >
+          {vue === "essayage" && image ? (
+            <>
+              <img
+                src={image}
+                alt={`Essayage de ${result.nom} sur ton avatar`}
+                className="size-full object-cover"
+              />
+              <span className="absolute bottom-3 left-3 inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-caption font-semibold text-ink">
+                <Sparkles className="size-3.5 text-brand" aria-hidden="true" />
+                Sur toi
+              </span>
+            </>
+          ) : (
+            <ProductImage
+              src={result.imageUrl}
+              alt={result.nom}
+              categorie={result.categorie}
+              className="size-full"
             />
-            <span className="absolute bottom-3 left-3 inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-caption font-semibold text-ink">
-              <Sparkles className="size-3.5 text-brand" aria-hidden="true" />
-              Sur toi
-            </span>
-          </>
-        ) : (
-          <ProductImage
-            src={result.imageUrl}
-            alt={result.nom}
-            categorie={result.categorie}
-            className="size-full"
-          />
-        )}
+          )}
+        </button>
+        <ImageLightbox
+          src={imageAffichee}
+          alt={vue === "essayage" ? `Essayage de ${result.nom}` : result.nom}
+          open={pleinEcran}
+          onOpenChange={setPleinEcran}
+        />
         <input
           ref={fileInput}
           type="file"

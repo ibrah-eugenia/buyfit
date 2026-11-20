@@ -1155,6 +1155,11 @@ a.serp-item:hover {
 /* ---------- Achat (agent H Company) ---------- */
 .slide-media {
   display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  font: inherit;
+  cursor: zoom-in;
 }
 .slide-body .buy {
   height: 40px;
@@ -1790,4 +1795,66 @@ a.btn {
 .fit-edit:hover {
   background: #fff;
   color: var(--brand);
+}
+
+/* ---------- Plein écran (clic sur une image) ---------- */
+.fit-stage.fit-ready {
+  cursor: zoom-in;
+}
+.fit-stage.fit-ready.zoomed {
+  cursor: grab;
+}
+.thumb-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: 12px;
+  cursor: zoom-in;
+  flex-shrink: 0;
+}
+.thumb-btn:focus-visible,
+.slide-media:focus-visible {
+  outline: 3px solid var(--brand);
+  outline-offset: 2px;
+}
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.9);
+  cursor: zoom-out;
+  animation: fade-in 0.15s ease;
+}
+.lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 14px;
+  cursor: default;
+}
+.lightbox-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--white);
+  cursor: pointer;
+}
+.lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+.lightbox-close:focus-visible {
+  outline: 3px solid var(--white);
+  outline-offset: 2px;
 }
