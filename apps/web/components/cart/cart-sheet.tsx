@@ -40,7 +40,9 @@ export function CartButton() {
       </SheetTrigger>
       <SheetContent className="w-full gap-0 sm:max-w-md">
         <SheetHeader className="border-b border-line-soft">
-          <SheetTitle className="text-title font-bold">Ton panier BuyFit</SheetTitle>
+          <SheetTitle className="font-display text-[34px] leading-none font-normal text-ink">
+            Ton panier<span className="text-brand">.</span>
+          </SheetTitle>
           <SheetDescription>
             Tous tes articles, toutes marques confondues. L&apos;agent passe une commande par
             marque.
@@ -65,7 +67,7 @@ export function CartButton() {
               {items.map((item) => (
                 <li
                   key={item.lineId}
-                  className="flex gap-3 rounded-xl border border-line-soft p-2.5"
+                  className="flex gap-3 rounded-[20px] border border-ink/10 p-2.5"
                 >
                   <ProductImage
                     src={item.product.imageUrl}

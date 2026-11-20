@@ -29,7 +29,7 @@ export function SizeSelect({
         id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="h-9 rounded-[10px] border border-input bg-white px-2.5 text-sm font-semibold text-ink outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="h-9 rounded-full border border-input bg-white px-2.5 text-sm font-semibold text-ink outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
       >
         {liste.map((t) => (
           <option key={t} value={t}>

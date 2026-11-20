@@ -87,10 +87,10 @@ function Settings() {
                       el.scrollIntoView({ block: "nearest", inline: "nearest" });
                   }}
                   className={cn(
-                    "h-10 w-full rounded-[10px] px-3.5 text-left text-sm font-semibold whitespace-nowrap transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+                    "h-10 w-full rounded-full px-4 text-left text-sm font-semibold whitespace-nowrap transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
                     section === s.id
-                      ? "bg-blush text-brand-deep"
-                      : "text-grey hover:bg-linen hover:text-ink",
+                      ? "bg-ink text-white"
+                      : "text-copy hover:bg-linen hover:text-ink",
                   )}
                 >
                   {s.label}

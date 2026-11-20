@@ -13,7 +13,7 @@ export function OrderCard({ order }: { order: WebOrder }) {
   }).format(new Date(order.createdAt));
   return (
     <article
-      className="flex flex-col gap-4 rounded-2xl border border-line-soft bg-white p-4"
+      className="flex flex-col gap-4 rounded-[24px] border border-ink/10 bg-white p-4"
       aria-label={`Commande ${order.marchand}`}
     >
       <div className="flex flex-wrap items-start justify-between gap-2">

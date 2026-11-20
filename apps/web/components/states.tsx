@@ -26,7 +26,7 @@ export function CardsSkeleton({ count = 3, className }: { count?: number; classN
   return (
     <div role="status" aria-label="Chargement" className={cn("grid gap-3", className)}>
       {Array.from({ length: count }, (_, i) => (
-        <div key={i} className="flex gap-3 rounded-xl border border-line-soft p-3">
+        <div key={i} className="flex gap-3 rounded-[20px] border border-ink/10 p-3">
           <Skeleton className="h-[72px] w-[60px] rounded-[10px]" />
           <div className="flex flex-1 flex-col gap-2 py-1">
             <Skeleton className="h-3 w-24" />
