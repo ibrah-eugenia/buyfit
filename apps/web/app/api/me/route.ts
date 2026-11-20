@@ -13,11 +13,7 @@ export async function GET(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Non connecté." }, { status: 401 });
-  const { data } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const { data } = await supabase.from("profiles").select("*").eq("user_id", user.id).maybeSingle();
   const profile = data ? toProfile(data) : null;
   // Photo de profil : la plus récente de face, sinon le mannequin (URL signée 1 h).
   const photos = await listUserPhotos();

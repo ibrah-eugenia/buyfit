@@ -193,7 +193,7 @@ export default defineContentScript({
       host.style.display = "none";
       // Toujours réafficher le logo, même si la sélection échoue ou est interrompue
       // (sinon il reste masqué jusqu'au rechargement de la page).
-      let result: Awaited<ReturnType<typeof startScreenSelection>> = null;
+      let result: Awaited<ReturnType<typeof startScreenSelection>>;
       try {
         result = await startScreenSelection();
       } catch {

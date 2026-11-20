@@ -1651,12 +1651,7 @@ a.btn {
   left: 0;
   right: 0;
   height: 38%;
-  background: linear-gradient(
-    180deg,
-    transparent,
-    rgba(255, 255, 255, 0.55) 50%,
-    transparent
-  );
+  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.55) 50%, transparent);
   animation: fit-scan 2.2s cubic-bezier(0.45, 0, 0.55, 1) infinite;
 }
 .fit-loading-text {

@@ -17,13 +17,20 @@ const AIDES: Record<Zone, { methode: string; reperes: [string, string][] }> = {
     methode:
       "Debout face au miroir, bras le long du corps : compare la largeur de tes épaules à celle de tes hanches.",
     reperes: [
-      ["Étroites", "plus étroites que tes hanches ; les coutures d'épaule des t-shirts tombent sur ton bras."],
+      [
+        "Étroites",
+        "plus étroites que tes hanches ; les coutures d'épaule des t-shirts tombent sur ton bras.",
+      ],
       ["Moyennes", "alignées avec tes hanches ; les coutures tombent pile sur l'os de l'épaule."],
-      ["Larges", "nettement plus larges que tes hanches ; les t-shirts tirent aux épaules avant d'être serrés ailleurs."],
+      [
+        "Larges",
+        "nettement plus larges que tes hanches ; les t-shirts tirent aux épaules avant d'être serrés ailleurs.",
+      ],
     ],
   },
   ventre: {
-    methode: "De profil, en position naturelle (sans rentrer le ventre) : regarde la ligne entre ta poitrine et ton bassin.",
+    methode:
+      "De profil, en position naturelle (sans rentrer le ventre) : regarde la ligne entre ta poitrine et ton bassin.",
     reperes: [
       ["Plat", "la ligne est droite, le ventre ne dépasse pas."],
       ["Moyen", "léger relief sous le nombril, qui reste en retrait de la poitrine."],

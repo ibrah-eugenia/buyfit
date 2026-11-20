@@ -140,10 +140,7 @@ export function StepCorps({
         {TAILLES_HABITUELLES.map((t) => {
           const { error } = getFieldState(`tailles.${t.key}`, formState);
           return (
-            <fieldset
-              key={t.key}
-              aria-describedby={error ? `taille-${t.key}-err` : undefined}
-            >
+            <fieldset key={t.key} aria-describedby={error ? `taille-${t.key}-err` : undefined}>
               <legend className="mb-2 text-sm font-semibold">
                 {t.label}
                 <span className="text-brand" aria-hidden="true">
@@ -169,7 +166,9 @@ export function StepCorps({
                               key={o}
                               type="button"
                               aria-pressed={on}
-                              onClick={() => field.onChange(toggleSize(field.value ?? "", o, t.options))}
+                              onClick={() =>
+                                field.onChange(toggleSize(field.value ?? "", o, t.options))
+                              }
                               className={`h-11 rounded-2xl border text-sm font-semibold transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none ${
                                 on
                                   ? "border-[1.5px] border-brand bg-blush font-bold text-brand-deep"

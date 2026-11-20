@@ -66,7 +66,11 @@ function versWebProfile(p: Profile, photos: UserPhoto[], comptes: MerchantAccoun
         photos.filter((photo) => !isMannequin(photo) && !isSource(photo)),
         "pied",
       )?.url ?? undefined,
-    photoTeteUrl: dernierePhoto(photos.filter((photo) => !isSource(photo)), "face")?.url ?? undefined,
+    photoTeteUrl:
+      dernierePhoto(
+        photos.filter((photo) => !isSource(photo)),
+        "face",
+      )?.url ?? undefined,
     taille: p.taille,
     mensurations: p.mensurations,
     poidsKg: p.poidsKg ?? undefined,

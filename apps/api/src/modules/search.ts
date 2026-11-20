@@ -104,7 +104,9 @@ async function searchOnce(req: SearchRequest): Promise<SearchResponse> {
   // l'autre rayon même avec « homme » dans la requête. Rayon inconnu → on garde l'article.
   const wrongRayon = (id: string) => {
     const r = prices.get(id)?.rayon;
-    return !!r && (req.genre === "homme" || req.genre === "femme") && r !== req.genre && r !== "mixte";
+    return (
+      !!r && (req.genre === "homme" || req.genre === "femme") && r !== req.genre && r !== "mixte"
+    );
   };
   const resultats = filtered.resultats.filter((p) => !wrongRayon(p.id));
   console.info(
@@ -187,7 +189,9 @@ export function zaraRayon(json: string): Rayon | null {
  */
 export function uniqloRayon(html: string): Rayon | null {
   const g = html
-    .match(/"gender"\s*:\s*\{\s*"id"\s*:\s*"\d+"\s*,\s*"level"\s*:\s*1\s*,\s*"name"\s*:\s*"([a-z]+)"/i)?.[1]
+    .match(
+      /"gender"\s*:\s*\{\s*"id"\s*:\s*"\d+"\s*,\s*"level"\s*:\s*1\s*,\s*"name"\s*:\s*"([a-z]+)"/i,
+    )?.[1]
     ?.toUpperCase();
   if (!g) return null;
   if (g === "MEN" || g === "MAN" || g === "HOMME") return "homme";

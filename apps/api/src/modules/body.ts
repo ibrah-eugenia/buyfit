@@ -26,7 +26,8 @@ export function describeBody(row: Row): string {
   if (weight) parts.push(`weight about ${Math.round(weight)} kg`);
   // Épaules étroites + ventre plat + hanches étroites : silhouette fine, déclarée par
   // l'utilisateur ; elle prime sur l'IMC (un 1,83 m / 83 kg peut être fin et élancé).
-  const slim = morpho.epaules === "etroites" && morpho.ventre === "plat" && morpho.hanches !== "larges";
+  const slim =
+    morpho.epaules === "etroites" && morpho.ventre === "plat" && morpho.hanches !== "larges";
   if (height && weight && !slim) {
     const bmi = weight / (height / 100) ** 2;
     parts.push(

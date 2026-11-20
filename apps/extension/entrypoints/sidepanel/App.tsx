@@ -133,9 +133,7 @@ export function App() {
         </div>
       </header>
 
-      {phase.kind === "idle" && (
-        <Home userId={signedIn?.userId ?? USER_ID} account={signedIn} />
-      )}
+      {phase.kind === "idle" && <Home userId={signedIn?.userId ?? USER_ID} account={signedIn} />}
 
       {phase.kind !== "idle" && (
         <main className="content">

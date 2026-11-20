@@ -15,7 +15,9 @@ export type GarmentAnalysis = { zone: GarmentZone; description: string };
 
 const ZONES: GarmentZone[] = ["haut", "bas", "veste", "robe", "chaussures"];
 
-const PROMPT = (name: string) => `You are a fashion product analyst. The image is a store product photo of "${name}".
+const PROMPT = (
+  name: string,
+) => `You are a fashion product analyst. The image is a store product photo of "${name}".
 It may show a model wearing a full outfit: analyse ONLY the product named above.
 Answer ONLY with a JSON object, no other text:
 {"zone": one of "haut" (t-shirt, shirt, sweater, hoodie, top), "bas" (trousers, jeans, shorts, skirt), "veste" (jacket, coat, blazer, cardigan worn open), "robe" (dress, jumpsuit), "chaussures" (shoes),
@@ -68,7 +70,10 @@ export async function analyzeGarment(imageUrl: string, name: string): Promise<Ga
     console.info(`[garment] ${Date.now() - started} ms`, parsed ?? "réponse illisible");
     return parsed ?? fallback;
   } catch (err) {
-    console.warn("[garment] analyse ignorée :", err instanceof Error ? err.message.slice(0, 120) : err);
+    console.warn(
+      "[garment] analyse ignorée :",
+      err instanceof Error ? err.message.slice(0, 120) : err,
+    );
     return fallback;
   }
 }
@@ -106,7 +111,10 @@ async function fetchPage(url: string): Promise<string> {
  * du même coloris (JSON `?ajax=true`). Uniqlo : 1re photo secondaire avec mannequin.
  * Échec ou délai → la photo trouvée seule (jamais bloquant).
  */
-export async function productRefs(productUrl: string | undefined, imageUrl: string): Promise<ProductRefs> {
+export async function productRefs(
+  productUrl: string | undefined,
+  imageUrl: string,
+): Promise<ProductRefs> {
   const fallback: ProductRefs = { garment: imageUrl };
   if (!productUrl || config.mocks.brightdata) return fallback;
   try {
@@ -131,11 +139,20 @@ export async function productRefs(productUrl: string | undefined, imageUrl: stri
       const color = imageUrl.match(new RegExp(`goods_(\\d{2})_${item}`))?.[1];
       if (!color) return fallback;
       const html = await fetchPage(productUrl);
-      const subs = [...html.matchAll(/\{"image":"(https:\/\/image\.uniqlo\.com[^"]+\/sub\/[^"]+)","model":\[\{/g)];
+      const subs = [
+        ...html.matchAll(
+          /\{"image":"(https:\/\/image\.uniqlo\.com[^"]+\/sub\/[^"]+)","model":\[\{/g,
+        ),
+      ];
       const sub = subs.find((m) => {
         const rest = html.slice(m.index! + m[0].length, m.index! + m[0].length + 1500);
-        const seg = rest.slice(0, rest.indexOf('{"image":') > 0 ? rest.indexOf('{"image":') : undefined);
-        return new RegExp(`"itemId":"${item}","sampleCode":"[^"]*","colorCode":"${color}"`).test(seg);
+        const seg = rest.slice(
+          0,
+          rest.indexOf('{"image":') > 0 ? rest.indexOf('{"image":') : undefined,
+        );
+        return new RegExp(`"itemId":"${item}","sampleCode":"[^"]*","colorCode":"${color}"`).test(
+          seg,
+        );
       })?.[1];
       return sub ? { garment: imageUrl, look: sub } : fallback;
     }

@@ -19,7 +19,10 @@ const ZONE_FOCUS: Record<Zone, { x: number; y: number; scale: number }> = {
 /** Zone de la pièce sur une photo en pied 3:4 (centre en %, et zoom pour la cadrer). */
 const BAS = /pantalon|jean|short|chino|jogging|jupe|bermuda|legging|cargo/i;
 const PIEDS = /chaussure|basket|sneaker|botte|bottine|mocassin|sandale|derby/i;
-export function focusFor(categorie?: string, nom?: string): { x: number; y: number; scale: number } {
+export function focusFor(
+  categorie?: string,
+  nom?: string,
+): { x: number; y: number; scale: number } {
   const t = `${categorie ?? ""} ${nom ?? ""}`;
   if (PIEDS.test(t)) return { x: 50, y: 90, scale: 2.6 };
   if (BAS.test(t)) return { x: 50, y: 66, scale: 1.7 };

@@ -283,7 +283,10 @@ function PhotoSet({
   return (
     <div className="rounded-2xl border border-line bg-white p-4">
       <p className="text-sm font-semibold">
-        {label} <span className="font-normal text-grey">({items.length}/{MAX_PHOTOS})</span>
+        {label}{" "}
+        <span className="font-normal text-grey">
+          ({items.length}/{MAX_PHOTOS})
+        </span>
       </p>
       <p className="mb-3 text-caption text-grey">{hint}</p>
       <div className="grid grid-cols-4 gap-2">
